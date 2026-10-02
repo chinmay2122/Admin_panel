@@ -11,15 +11,20 @@ import {
   Award,
   Briefcase,
   FileText,
+  ShieldAlert,
+  CreditCard,
+  Sliders,
   Menu,
   X,
   LogOut,
   Loader2,
   Shield,
   ArrowUpRight,
+  Database as DbIcon,
 } from "lucide-react";
 import { DEFAULT_ADMIN } from "@/lib/auth";
 import { ToastProvider } from "@/components/ui";
+import { isBrowserSupabaseConfigured } from "@/lib/supabase/client";
 
 interface NavItem {
   name: string;
@@ -30,21 +35,27 @@ interface NavItem {
 const navItems: NavItem[] = [
   { name: "Overview", href: "/admin/overview", icon: LayoutDashboard },
   { name: "Users", href: "/admin/users", icon: Users },
+  { name: "Subscriptions", href: "/admin/subscriptions", icon: CreditCard },
   { name: "Creators", href: "/admin/creators", icon: Sparkles },
   { name: "Artworks", href: "/admin/artworks", icon: Palette },
+  { name: "Reports", href: "/admin/reports", icon: ShieldAlert },
   { name: "COR", href: "/admin/cor", icon: Award },
   { name: "Jobs", href: "/admin/jobs", icon: Briefcase },
   { name: "Applications", href: "/admin/applications", icon: FileText },
+  { name: "Studio Settings", href: "/admin/settings", icon: Sliders },
 ];
 
 function getPageTitle(pathname: string): string {
   if (pathname.includes("/admin/overview")) return "Overview";
   if (pathname.includes("/admin/users")) return "Users";
+  if (pathname.includes("/admin/subscriptions")) return "Subscriptions";
   if (pathname.includes("/admin/creators")) return "Creators";
   if (pathname.includes("/admin/artworks")) return "Artworks";
+  if (pathname.includes("/admin/reports")) return "Reports & moderation";
   if (pathname.includes("/admin/cor")) return "COR";
   if (pathname.includes("/admin/jobs")) return "Jobs";
   if (pathname.includes("/admin/applications")) return "Applications";
+  if (pathname.includes("/admin/settings")) return "Studio settings";
   return "Overview";
 }
 
@@ -103,7 +114,7 @@ export default function DashboardLayout({
           className="flex items-center gap-1.5 select-none"
         >
           <span className="font-semibold tracking-tight text-base text-[#141413]">
-            iRASStudio<span className="text-xs align-super font-normal text-[#6E6E69]">®</span>
+            ErasStudio<span className="text-xs align-super font-normal text-[#6E6E69]">®</span>
           </span>
           <span className="text-[10px] uppercase tracking-wider text-[#6E6E69] px-1.5 py-0.5 rounded border border-[#E8E8E3] bg-white">
             Admin
@@ -182,7 +193,7 @@ export default function DashboardLayout({
                 </div>
                 <div className="text-left">
                   <p className="text-xs font-medium text-[#141413]">Admin Console</p>
-                  <p className="text-[11px] text-[#71716D]">admin123@iras.studio</p>
+                  <p className="text-[11px] text-[#71716D]">admin123@erasstudio.com</p>
                 </div>
               </div>
               <button
@@ -212,7 +223,7 @@ export default function DashboardLayout({
         <div className="p-6 border-b border-[#E8E8E3] flex items-center justify-between">
           <Link href="/admin/overview" className="flex items-center gap-1.5 group">
             <span className="font-semibold tracking-tight text-lg text-[#141413] group-hover:text-[#B8532F] transition-colors">
-              iRASStudio<span className="text-xs align-super font-normal text-[#6E6E69]">®</span>
+              ErasStudio<span className="text-xs align-super font-normal text-[#6E6E69]">®</span>
             </span>
           </Link>
           <span className="text-[10px] font-medium tracking-wider uppercase text-[#6E6E69] px-2 py-0.5 rounded border border-[#E8E8E3] bg-white">
@@ -328,6 +339,28 @@ export default function DashboardLayout({
 
           {/* Right Top Bar Controls: Admin Avatar & Logout Button */}
           <div className="flex items-center gap-3">
+            {/* Supabase Status Pill */}
+            <div
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#E8E8E3] bg-white text-xs text-[#5E5E59]"
+              title={
+                isBrowserSupabaseConfigured
+                  ? "Connected to live Supabase database"
+                  : "Using local in-memory dataset. Set NEXT_PUBLIC_SUPABASE_URL in .env.local to activate live Supabase."
+              }
+            >
+              <DbIcon className="w-3.5 h-3.5 text-[#8A8A85]" />
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isBrowserSupabaseConfigured
+                    ? "bg-[#3B7E55] animate-pulse"
+                    : "bg-[#D97706]"
+                }`}
+              />
+              <span className="font-medium text-[#141413]">
+                {isBrowserSupabaseConfigured ? "Supabase Live" : "DB: Local Mode"}
+              </span>
+            </div>
+
             {/* Admin Avatar Pill */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#E8E8E3] bg-white text-xs text-[#141413]">
               <div className="w-5 h-5 rounded-full bg-[#EAEAE5] flex items-center justify-center text-[10px] font-semibold text-[#141413]">

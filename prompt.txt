@@ -1,0 +1,361 @@
+================================================================================
+ERASSTUDIO (FORMERLY IRAS STUDIO) — CREATOR & COLLECTOR IMPLEMENTATION BLUEPRINT
+================================================================================
+
+This document contains the exact architectural changes, database synchronizations,
+and ready-to-use developer/AI prompts to update the Creator and Collector sides of
+the ErasStudio platform so that they match the Admin dashboard.
+
+--------------------------------------------------------------------------------
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+1. Summary of Changes Made in the Admin Side
+2. Database Schema Checklist (Supabase)
+3. Creator Side: Required Changes & Ready-to-Use Prompts
+4. Collector Side: Required Changes & Ready-to-Use Prompts
+5. Shared Design System & Brand Identity Rules
+6. Master Copy-Paste Prompts for AI Agents
+
+================================================================================
+1. SUMMARY OF CHANGES MADE IN THE ADMIN SIDE
+================================================================================
+
+1. Branding & Identity:
+   - Official platform name updated to "ErasStudio®" (formerly iRAS Studio / iras).
+   - Typography updated to Poppins (Regular 400 & Semi-Bold 600) as primary font,
+     and Century / Serif as secondary editorial font for titles and curatorial headings.
+   - Clean, light neutral luxury art aesthetic: Canvas (#FAFAF8), Borders (#E8E8E3),
+     Ink (#141413), Soft Sand/Beige display container (#EFECE6).
+
+2. Artworks & Curatorial Metadata:
+   - Supported metadata on artworks: Title, Creator, Medium (Art Type), Dimensions,
+     Year (e.g. 2026), Location (e.g. Mumbai), Collection / Series (e.g. "Monsoon Studies"),
+     Availability ("Available", "For Sale", "Not for sale", "Sold"), Description,
+     Price Visibility ("Show Price", "Price on Request", "Hide Price"), and Publication Status.
+   - Two-column Artwork Discovery experience:
+     * Left: Soft sand/beige rounded frame (#EFECE6, rounded-3xl) with full artwork image.
+     * Right: Category/Year tag, Large Serif Title, Creator byline avatar pill,
+       Curatorial description, Specifications table with horizontal divider lines,
+       Price / "Price on request", and Pill Action Buttons.
+
+3. Community Moderation & Reports System:
+   - Dedicated "Reports & moderation" section with tabs: All, Pending, Resolved, Dismissed.
+   - Standardized report reasons:
+     * Possible copyright infringement
+     * Inappropriate content
+     * Incorrect artwork information
+     * Harassment or offensive content
+     * Spam or misleading content
+     * Fraud or scam
+     * Stolen artwork
+     * Other
+   - Moderation actions: Dismiss, Hide Content (switches artwork to draft), Remove Artwork,
+     Suspend User, and Mark Resolved.
+   - Traceable moderation audit trail (moderation_audit_logs).
+
+4. Pro Opportunities & Job Applications:
+   - Pro subscription tier ("free", "pro", "elite") on user profiles.
+   - Pro-only exclusive jobs, residencies, and master commissions.
+   - Strict database trigger preventing non-Pro users from applying to Pro-only jobs.
+
+================================================================================
+2. DATABASE SCHEMA CHECKLIST (SUPABASE)
+================================================================================
+
+Ensure the following tables and columns exist in your Supabase project:
+
+1. public.profiles:
+   - plan text DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'elite'))
+   - role text DEFAULT 'User' CHECK (role IN ('Admin', 'User', 'Creator'))
+   - status text DEFAULT 'active' CHECK (status IN ('active', 'suspended'))
+   - full_name, email, portfolio_url, primary_medium, artist_statement, profile_pic_url
+
+2. public.artworks:
+   - title text NOT NULL
+   - art_type text (Medium)
+   - artist_name text NOT NULL
+   - creator_id uuid REFERENCES public.profiles(id)
+   - description text
+   - image_url text NOT NULL
+   - additional_images text[] DEFAULT '{}'
+   - price numeric
+   - price_visibility text DEFAULT 'Show Price' CHECK (price_visibility IN ('Show Price', 'Price on Request', 'Hide Price'))
+   - status text DEFAULT 'Available' CHECK (status IN ('Available', 'For Sale', 'Not for sale', 'Sold'))
+   - is_published boolean DEFAULT true
+   - year text
+   - dimensions text
+   - location text
+   - collection text
+   - is_featured boolean DEFAULT false
+   - is_flagged boolean DEFAULT false
+
+3. public.reports:
+   - id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+   - artwork_id uuid REFERENCES public.artworks(id) ON DELETE CASCADE
+   - reporter_user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE
+   - artwork_owner_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE
+   - reason text NOT NULL
+   - details text
+   - status text DEFAULT 'pending' CHECK (status IN ('pending', 'resolved', 'dismissed'))
+   - moderation_action text
+   - moderation_note text
+   - resolved_by uuid REFERENCES public.profiles(id)
+   - resolved_at timestamp with time zone
+   - created_at timestamp with time zone DEFAULT now()
+
+4. public.moderation_audit_logs:
+   - id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+   - report_id uuid REFERENCES public.reports(id) ON DELETE SET NULL
+   - artwork_id uuid REFERENCES public.artworks(id) ON DELETE SET NULL
+   - target_user_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL
+   - admin_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL
+   - action text NOT NULL
+   - note text
+   - created_at timestamp with time zone DEFAULT now()
+
+5. public.jobs & public.job_applications:
+   - jobs: title, company, type, location, description, requirements, is_pro_only (boolean)
+   - job_applications: job_id, candidate_id, cover_letter, portfolio_url, resume_url, status
+
+================================================================================
+3. CREATOR SIDE: REQUIRED CHANGES & READY-TO-USE PROMPTS
+================================================================================
+
+What needs to be added / updated in the Creator Portal:
+1. Artwork Upload & Edit Form:
+   - Add fields for: Year, Location, Collection/Series, Medium, Dimensions,
+     Description, and Price Visibility ("Show Price", "Price on Request", "Hide Price").
+   - Ability to toggle artwork status between "Published" and "Draft".
+2. Inquiries / Private Acquisition Chat:
+   - When a collector clicks "Express Interest →" on an artwork, it creates an inquiry in
+     inquiries_chats and posts a message in messages table.
+   - Creator inbox to view acquisition inquiries and converse privately with the collector.
+3. Pro Opportunities & Residency Applications:
+   - Creator dashboard section showing curated jobs, commissions, and residencies.
+   - Display a "Pro Exclusive" badge on is_pro_only listings.
+   - Allow creators with plan = 'pro' or 'elite' to apply with cover letter, portfolio link,
+     and resume. If on Free plan, show an upgrade prompt.
+4. Curatorial Moderation & Status Notice:
+   - If an artwork is hidden by admin moderation, display a subtle notification:
+     "This artwork has been unlisted for curatorial review."
+   - If creator account status is 'suspended', restrict publishing and display appeal contact.
+
+--------------------------------------------------------------------------------
+PROMPT FOR CREATOR PORTAL:
+--------------------------------------------------------------------------------
+
+"""
+You are working on the Creator portal for ErasStudio® (formerly iRAS Studio), an editorial art and creative community platform.
+
+Please implement the following updates to align with the database and admin platform:
+
+1. BRANDING & FONTS:
+- Update app branding to 'ErasStudio®'.
+- Set font family to Poppins (Regular 400 & Semi-Bold 600) as primary font, and Century / Serif for artwork titles and editorial headings.
+- Clean minimalist aesthetic: background #FAFAF8, text #141413, subtle borders #E8E8E3.
+
+2. ARTWORK UPLOAD & MANAGEMENT FORM:
+Update the artwork creation and edit modal/page to include all metadata fields matching the Supabase artworks schema:
+- Title (text, required)
+- Medium / Art Type (e.g. Painting, Cast Bronze, Diffused Optical Glass)
+- Dimensions (e.g. '80 × 100 cm' or '120 x 85 x 40 cm')
+- Year (e.g. '2026')
+- Location (e.g. 'Mumbai', 'Tokyo', 'Berlin')
+- Collection / Series (e.g. 'Monsoon Studies')
+- Description (curatorial statement, multiline)
+- Price (numeric)
+- Price Visibility: Dropdown or radio choice between ['Show Price', 'Price on Request', 'Hide Price']
+- Availability Status: Dropdown choice between ['Available', 'For Sale', 'Not for sale', 'Sold']
+- Visibility: Toggle between 'Published' and 'Draft' (sets is_published boolean)
+- Image URL and additional_images array.
+
+3. PRO OPPORTUNITIES & JOBS:
+Implement the 'Opportunities & Residencies' section:
+- Query jobs from public.jobs table where status = 'open'.
+- If job.is_pro_only is true, show a sleek 'PRO EXCLUSIVE' badge.
+- When applying, check if creator's profile plan is 'pro' or 'elite' (or is_premium = true).
+- If creator is on 'free' plan, show a modal explaining this opportunity requires the Pro subscription tier, with an 'Upgrade to Pro' button.
+- If creator has Pro status, allow them to submit an application to public.job_applications with:
+  * cover_letter (textarea)
+  * portfolio_url (input)
+  * resume_url (input)
+
+4. INQUIRIES & ACQUISITION INBOX:
+- Connect to public.inquiries_chats and public.messages.
+- Display inquiries received when collectors click 'Express Interest' on the creator's artworks.
+- Allow private messaging between creator and collector discussing pricing and private acquisition.
+"""
+
+================================================================================
+4. COLLECTOR SIDE: REQUIRED CHANGES & READY-TO-USE PROMPTS
+================================================================================
+
+What needs to be added / updated in the Collector / User Side:
+1. Artwork Discovery & Presentation:
+   - Two-column detail view matching the design:
+     * Left: Sand/beige framed container (#EFECE6, rounded-3xl) with full artwork image.
+     * Right:
+       - Category / Year tag (e.g. "PAINTING / 2026")
+       - Large Serif title (e.g. "Monsoon No. 4")
+       - Creator byline avatar pill (Initials avatar + Artist Name ↗)
+       - Curatorial description
+       - Specifications table (Medium, Dimensions, Year, Location, Collection, Availability)
+       - Price section ("Price on request" or formatted price)
+       - Action buttons:
+         1. [ Express Interest → ] (black pill)
+         2. [ View Creator ] (outlined pill)
+         3. [ Save Artwork ] (outlined pill)
+         4. [ Report Artwork ] (subtle flag pill button)
+       - Subtext: "A direct connection, not a checkout. Pricing and any acquisition are discussed privately with the creator."
+2. "Express Interest" Flow:
+   - Clicking "Express Interest →" opens a brief inquiry modal or directly starts an inquiry in
+     inquiries_chats with the creator, sending a message: "I am interested in acquiring [Artwork Title]. Please share further acquisition details."
+3. "Report Artwork" Flow:
+   - Clicking "Report Artwork" opens the moderation report modal.
+   - User selects reason:
+     * Possible copyright infringement
+     * Inappropriate content
+     * Incorrect artwork information
+     * Harassment or offensive content
+     * Spam or misleading content
+     * Fraud or scam
+     * Stolen artwork
+     * Other
+   - Optional details message textarea.
+   - Submits report to public.reports table with status = 'pending'.
+   - Shows confirmation toast: "Thank you. Your report has been submitted to curatorial moderation."
+4. Save / Shortlist:
+   - Clicking "Save Artwork" saves to collector's personal collection/bookmarks.
+
+--------------------------------------------------------------------------------
+PROMPT FOR COLLECTOR / DISCOVERY PORTAL:
+--------------------------------------------------------------------------------
+
+"""
+You are working on the Collector & Discovery experience for ErasStudio® (formerly iRAS Studio), an editorial art community platform.
+
+Please implement the following updates to match the new luxury art gallery design:
+
+1. BRANDING & DESIGN SYSTEM:
+- App name: 'ErasStudio®'.
+- Typography: Poppins for body/labels, and Century / Serif for artwork titles and editorial headings.
+- Palette: Background #FAFAF8, text #141413, subtle borders #E8E8E3, soft sand background #EFECE6.
+
+2. ARTWORK DETAIL & DISCOVERY VIEW:
+Create the 2-column detailed artwork experience:
+- Top Left: '← Back to discovery' pill button returning to catalog.
+- Left Column: Framed container in soft sand/cream (#EFECE6, rounded-3xl, p-8 to p-12) displaying the artwork image with rounded corners and subtle shadow.
+- Right Column:
+  * Category / Year tag: e.g. '{art.art_type} / {art.year || 2026}' in small uppercase font.
+  * Title: Large Serif heading (text-4xl or text-5xl font-serif text-[#141413]).
+  * Creator Byline: Circle avatar with creator initials (e.g. 'RM') and creator name with link icon '↗'.
+  * Description: Curatorial artwork description paragraph.
+  * Specifications Table with thin divider lines:
+    - Medium: {art.art_type}
+    - Dimensions: {art.dimensions}
+    - Year: {art.year}
+    - Location: {art.location}
+    - Collection: {art.collection}
+    - Availability: {art.status || 'Available'}
+  * Price: Display '{art.price}' or 'Price on request' if price_visibility is 'Price on Request' or price is 0.
+  * Action Buttons:
+    - [ Express Interest → ] (solid black rounded-full pill button)
+    - [ View Creator ] (white rounded-full pill button with border #D5D3CE)
+    - [ Save Artwork ] (white rounded-full pill button with border #D5D3CE)
+    - [ Report Artwork ] (subtle outlined pill button with Flag icon)
+  * Explanatory Subtext:
+    'A direct connection, not a checkout. Pricing and any acquisition are discussed privately with the creator.'
+
+3. 'EXPRESS INTEREST' ACQUISITION FLOW:
+- When a collector clicks 'Express Interest →', check if user is signed in.
+- Create or fetch chat thread in public.inquiries_chats between collector (guest_id) and artist (creator_id) for artwork_id.
+- Send initial message in public.messages: 'I am interested in acquiring "{art.title}". Let us discuss private acquisition.'
+- Notify collector: 'Your inquiry has been sent to {art.artist_name}. You can continue the conversation in Inquiries.'
+
+4. 'REPORT ARTWORK' COMMUNITY MODERATION FLOW:
+- Clicking 'Report Artwork' opens a modal with:
+  * Title: 'Report Artwork'
+  * Subtitle: 'Help keep the ErasStudio creative community safe, authentic, and respectful.'
+  * Reason dropdown:
+    ['Possible copyright infringement', 'Inappropriate content', 'Incorrect artwork information', 'Harassment or offensive content', 'Spam or misleading content', 'Fraud or scam', 'Stolen artwork', 'Other']
+  * Additional Details textarea (optional).
+  * Buttons: 'Cancel' and 'Submit Report'.
+- On submit, insert into public.reports:
+  {
+    artwork_id: art.id,
+    reporter_user_id: currentUser.id,
+    artwork_owner_id: art.creator_id,
+    reason: selectedReason,
+    details: detailsText,
+    status: 'pending'
+  }
+- Show toast: 'Report submitted. Our moderation team will review this shortly.'
+- This report immediately appears in the Admin 'Reports & moderation' dashboard.
+"""
+
+================================================================================
+5. SHARED DESIGN SYSTEM & BRAND IDENTITY RULES
+================================================================================
+
+Typography:
+- Primary: Poppins (Google Font), weights 400 (Regular) and 600 (Semi-Bold).
+- Secondary / Editorial: Century, Century Gothic, or Serif for titles.
+
+Color Palette:
+- Canvas / Background: #FAFAF8 (Warm off-white)
+- Surface / Cards: #FFFFFF
+- Display Container: #EFECE6 (Soft warm sand)
+- Ink / Text Primary: #141413 (Deep charcoal-black)
+- Ink / Muted: #6E6E69 (Medium neutral gray)
+- Ink / Subtle: #8A8A85 (Light neutral gray)
+- Border / Clean: #E8E8E3
+- Border / Subtle: #F0F0EB
+- Accent: #141413 (Pure black for primary buttons)
+- Status Badges:
+  * Published / Available / Resolved: #EAF2EC bg, #28633B text
+  * Pending / Review: #EFEFEF bg, #4A4A48 text (or #FAF5EC bg, #865E16 text)
+  * Dismissed / Draft: #F3F3EF bg, #71716D text
+  * Rejected / Danger: #FDF3F2 bg, #B83838 text
+
+Tone & Philosophy:
+- ErasStudio is an editorial curatorial salon, not a SaaS product or retail e-commerce cart.
+- Use phrases like "Express Interest", "Direct connection, not a checkout", "Curatorial inquiry",
+  "Considered and respectful".
+- Avoid shopping cart icons, "Buy Now" buttons, or generic discounts.
+
+================================================================================
+6. MASTER PROMPT FOR COMPLETE PLATFORM SYNC
+================================================================================
+
+Copy and paste the prompt below to update any codebase or sub-module:
+
+"""
+We have upgraded the ErasStudio® (formerly iRAS Studio) Admin Console with:
+1. Rebranded to ErasStudio® with Poppins (regular & semi-bold) and Century / Serif fonts.
+2. Two-column Artwork Discovery experience with sand display frames (#EFECE6), metadata specifications table (Medium, Dimensions, Year, Location, Collection, Availability), 'Price on request', and 'Express Interest →'.
+3. Community Reports & Moderation table with Pending, Resolved, Dismissed tabs and real moderation actions (Dismiss, Hide Content, Remove Artwork, Suspend User, Mark Resolved).
+4. Pro-tier subscription enforcement for exclusive jobs and candidate applications.
+
+Please update the client-side user/creator and collector application to synchronize with these changes:
+- Connect the 'Report Artwork' modal to public.reports (status = 'pending').
+- Connect 'Express Interest →' to private inquiry chat in public.inquiries_chats.
+- Display the new artwork metadata (Year, Location, Collection, Description, Dimensions).
+- Enforce Pro subscription tier (profile.plan in ['pro', 'elite']) on is_pro_only job opportunities.
+- Apply the luxury editorial aesthetic: Poppins & Century fonts, #FAFAF8 background, and rounded pill buttons.
+"""
+================================================================================
+
+================================================================================
+7. ANIMATED REPORT ICON (TriangleAlertIcon with motion/react)
+================================================================================
+
+For reporting an artwork, install `motion`:
+```bash
+npm install motion
+```
+
+Component: `components/ui/icons/TriangleAlertIcon.tsx`:
+- Animated interactive alert triangle on hover
+- Smooth micro-animations on triangle bounce, exclamation-line scaleY, and exclamation-dot
+- Use inside "Report Artwork" button and "Report Artwork" modal header
+================================================================================

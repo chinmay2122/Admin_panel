@@ -1,10 +1,22 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { COOKIE_OPTIONS } from "@/lib/auth";
+import { COOKIE_OPTIONS, verifySessionToken } from "@/lib/auth";
+import { reportsRepo } from "@/lib/data";
 
 export async function POST() {
   try {
     const cookieStore = await cookies();
+    const token = cookieStore.get(COOKIE_OPTIONS.name)?.value;
+    const session = await verifySessionToken(token);
+
+    if (session) {
+      await reportsRepo.logAudit({
+        adminId: session.id || "adm_01",
+        action: "admin_logout" as any,
+        note: `Administrator '${session.name}' logged out. Session invalidated.`,
+      }).catch(() => {});
+    }
+
     cookieStore.set({
       name: COOKIE_OPTIONS.name,
       value: "",

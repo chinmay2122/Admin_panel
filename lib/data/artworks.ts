@@ -1,17 +1,103 @@
-import { Artwork, ArtworkFilters } from "../types";
+import { Artwork, ArtworkFilters, ArtworkStatus } from "../types";
 import { seedArtworks } from "./seed";
+import { getSupabaseAdmin } from "../supabase/server";
 
 let artworksStore: Artwork[] = [...seedArtworks];
+
+function toSupabaseStatus(status?: string): "Available" | "For Sale" | "Not for sale" | "Sold" {
+  if (!status) return "Available";
+  const s = status.toLowerCase().trim();
+  if (s === "published" || s === "available") return "Available";
+  if (s === "for sale" || s === "forsale") return "For Sale";
+  if (s === "sold") return "Sold";
+  if (s === "draft" || s === "pending" || s === "rejected" || s === "not for sale") return "Not for sale";
+  return "Available";
+}
+
+function fromSupabaseStatus(status?: string): ArtworkStatus {
+  if (!status) return "published";
+  const s = status.toLowerCase().trim();
+  if (s === "available" || s === "for sale" || s === "sold") return "published";
+  if (s === "not for sale") return "draft";
+  return (status as any) || "published";
+}
+
+function mapFromSupabase(row: any): Artwork {
+  return {
+    id: row.id,
+    title: row.title || "Untitled",
+    creatorId: row.creator_id || "",
+    creatorName: row.artist_name || (row.profiles?.full_name ?? "Unknown Artist"),
+    medium: row.art_type || row.style || "Mixed Media",
+    dimensions: row.dimensions || "Dimensions unavailable",
+    price: Number(row.price) || 0,
+    imageUrl: row.image_url || "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
+    status: fromSupabaseStatus(row.status),
+    createdAt: row.created_at || new Date().toISOString(),
+    description: row.description || "",
+    year: row.year ? String(row.year) : undefined,
+    location: row.location || undefined,
+    collection: row.collection || undefined,
+    availability: row.availability || (row.status === "Sold" ? "Sold" : "Available"),
+    isFeatured: row.is_featured ?? false,
+    isFlagged: row.is_flagged ?? false,
+  };
+}
 
 export const artworksRepo = {
   /**
    * List artworks with optional filtering.
-   * Future Supabase replacement:
-   * const query = supabase.from('artworks').select('*');
-   * if (filters?.status) query.eq('status', filters.status);
-   * return await query;
+   * Connects to Supabase when configured, otherwise uses local in-memory/seed data.
    */
   async list(filters?: ArtworkFilters): Promise<Artwork[]> {
+    const supabase = getSupabaseAdmin();
+
+    if (supabase) {
+      try {
+        let query = supabase.from("artworks").select("*, profiles(*)");
+
+        if (filters?.status) {
+          query = query.ilike("status", filters.status);
+        }
+        if (filters?.creatorId) {
+          query = query.eq("creator_id", filters.creatorId);
+        }
+        if (filters?.creatorName) {
+          query = query.ilike("artist_name", `%${filters.creatorName}%`);
+        }
+        if (filters?.medium) {
+          query = query.ilike("art_type", `%${filters.medium}%`);
+        }
+        if (typeof filters?.minPrice === "number") {
+          query = query.gte("price", filters.minPrice);
+        }
+        if (typeof filters?.maxPrice === "number") {
+          query = query.lte("price", filters.maxPrice);
+        }
+
+        const { data, error } = await query.order("created_at", { ascending: false });
+
+        if (!error && data) {
+          let list = data.map(mapFromSupabase);
+
+          if (filters?.query) {
+            const q = filters.query.toLowerCase().trim();
+            list = list.filter(
+              (a) =>
+                a.title.toLowerCase().includes(q) ||
+                a.creatorName.toLowerCase().includes(q) ||
+                a.medium.toLowerCase().includes(q)
+            );
+          }
+
+          return list;
+        }
+      } catch (err) {
+        console.warn("Supabase query failed, falling back to local dataset:", err);
+      }
+    }
+
+    // Fallback to in-memory store
     let result = [...artworksStore];
 
     if (!filters) return result;
@@ -57,14 +143,114 @@ export const artworksRepo = {
    * Retrieve an artwork by ID.
    */
   async getById(id: string): Promise<Artwork | null> {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("artworks")
+          .select("*, profiles(*)")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (!error && data) {
+          return mapFromSupabase(data);
+        }
+      } catch (err) {
+        console.warn("Supabase getById failed, using fallback:", err);
+      }
+    }
+
     const artwork = artworksStore.find((a) => a.id === id);
     return artwork ? { ...artwork } : null;
+  },
+
+  /**
+   * Create a new artwork.
+   */
+  async create(data: {
+    title: string;
+    creatorId?: string;
+    creatorName: string;
+    medium?: string;
+    dimensions?: string;
+    price?: number;
+    imageUrl?: string;
+    status?: ArtworkStatus;
+  }): Promise<Artwork> {
+    const supabase = getSupabaseAdmin();
+    if (supabase && data.creatorId) {
+      try {
+        const payload: Record<string, any> = {
+          title: data.title,
+          creator_id: data.creatorId,
+          artist_name: data.creatorName,
+          art_type: data.medium || "Mixed Media",
+          dimensions: data.dimensions || "Dimensions unavailable",
+          price: data.price || 0,
+          image_url: data.imageUrl || "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
+          status: toSupabaseStatus(data.status),
+          is_published: data.status === "published",
+        };
+
+        const { data: created, error } = await (supabase.from("artworks") as any)
+          .insert(payload)
+          .select("*, profiles(*)")
+          .single();
+
+        if (!error && created) {
+          return mapFromSupabase(created);
+        }
+      } catch (err) {
+        console.warn("Supabase create artwork failed, using local fallback:", err);
+      }
+    }
+
+    const newArtwork: Artwork = {
+      id: `art_${Date.now().toString(36)}`,
+      title: data.title,
+      creatorId: data.creatorId || `crt_${Date.now().toString(36)}`,
+      creatorName: data.creatorName,
+      medium: data.medium || "Mixed Media",
+      dimensions: data.dimensions || "Dimensions unavailable",
+      price: data.price || 0,
+      imageUrl: data.imageUrl || "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
+      status: data.status || "published",
+      createdAt: new Date().toISOString(),
+    };
+
+    artworksStore.unshift(newArtwork);
+    return { ...newArtwork };
   },
 
   /**
    * Update an existing artwork.
    */
   async update(id: string, data: Partial<Artwork>): Promise<Artwork | null> {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      try {
+        const payload: Record<string, any> = {};
+        if (data.title !== undefined) payload.title = data.title;
+        if (data.price !== undefined) payload.price = data.price;
+        if (data.status !== undefined) payload.status = toSupabaseStatus(data.status);
+        if (data.imageUrl !== undefined) payload.image_url = data.imageUrl;
+        if (data.dimensions !== undefined) payload.dimensions = data.dimensions;
+        if (data.medium !== undefined) payload.art_type = data.medium;
+
+        const { data: updated, error } = await (supabase.from("artworks") as any)
+          .update(payload)
+          .eq("id", id)
+          .select("*, profiles(*)")
+          .single();
+
+        if (!error && updated) {
+          return mapFromSupabase(updated);
+        }
+      } catch (err) {
+        console.warn("Supabase update failed, using fallback:", err);
+      }
+    }
+
     const index = artworksStore.findIndex((a) => a.id === id);
     if (index === -1) return null;
 
@@ -81,6 +267,24 @@ export const artworksRepo = {
    * Bulk update artworks by IDs.
    */
   async bulkUpdate(ids: string[], data: Partial<Artwork>): Promise<number> {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      try {
+        const payload: Record<string, any> = {};
+        if (data.status !== undefined) payload.status = toSupabaseStatus(data.status);
+
+        const { error, count } = await (supabase.from("artworks") as any)
+          .update(payload)
+          .in("id", ids);
+
+        if (!error && typeof count === "number") {
+          return count;
+        }
+      } catch (err) {
+        console.warn("Supabase bulkUpdate failed, using fallback:", err);
+      }
+    }
+
     const idSet = new Set(ids);
     let count = 0;
     for (let i = 0; i < artworksStore.length; i++) {
@@ -100,6 +304,16 @@ export const artworksRepo = {
    * Remove an artwork by ID.
    */
   async remove(id: string): Promise<boolean> {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      try {
+        const { error } = await supabase.from("artworks").delete().eq("id", id);
+        if (!error) return true;
+      } catch (err) {
+        console.warn("Supabase remove failed, using fallback:", err);
+      }
+    }
+
     const initialLen = artworksStore.length;
     artworksStore = artworksStore.filter((a) => a.id !== id);
     return artworksStore.length < initialLen;
@@ -118,15 +332,17 @@ export const artworksRepo = {
     distinctCreators: string[];
     distinctMedia: string[];
   }> {
-    const total = artworksStore.length;
-    const published = artworksStore.filter((a) => a.status === "published").length;
-    const pending = artworksStore.filter((a) => a.status === "pending").length;
-    const draft = artworksStore.filter((a) => a.status === "draft").length;
-    const rejected = artworksStore.filter((a) => a.status === "rejected").length;
-    const totalValue = artworksStore.reduce((sum, a) => sum + (a.price || 0), 0);
+    const all = await this.list();
 
-    const distinctCreators = Array.from(new Set(artworksStore.map((a) => a.creatorName))).sort();
-    const distinctMedia = Array.from(new Set(artworksStore.map((a) => a.medium))).sort();
+    const total = all.length;
+    const published = all.filter((a) => a.status === "published" || a.status === "available" as any).length;
+    const pending = all.filter((a) => a.status === "pending").length;
+    const draft = all.filter((a) => a.status === "draft").length;
+    const rejected = all.filter((a) => a.status === "rejected").length;
+    const totalValue = all.reduce((sum, a) => sum + (a.price || 0), 0);
+
+    const distinctCreators = Array.from(new Set(all.map((a) => a.creatorName))).sort();
+    const distinctMedia = Array.from(new Set(all.map((a) => a.medium))).sort();
 
     return {
       total,

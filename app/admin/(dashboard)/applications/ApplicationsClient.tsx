@@ -441,7 +441,7 @@ export function ApplicationsClient({
                 "My practice bridges spatial physical installations with acoustic
                 membrane sculptures. I am interested in investigating vernacular
                 pigments and architectural terracotta forms in collaboration with
-                the iRAS Studio collective."
+                the ErasStudio collective."
               </p>
               <div className="pt-2 flex items-center justify-between text-[11px] text-[#71716D]">
                 <span>Portfolio Verification: Verified</span>

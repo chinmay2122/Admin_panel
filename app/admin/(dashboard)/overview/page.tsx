@@ -18,6 +18,7 @@ import {
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { GenerateReportButton } from "@/components/reports/GenerateReportButton";
 
 function formatDate(dateStr: string): string {
   try {
@@ -98,7 +99,7 @@ export default async function OverviewPage() {
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
       {/* Header */}
-      <div className="border-b border-[#E8E8E3] pb-5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+      <div className="border-b border-[#E8E8E3] pb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-xl md:text-2xl font-medium tracking-tight text-[#141413]">
             Studio Pulse
@@ -107,9 +108,12 @@ export default async function OverviewPage() {
             Real-time platform metrics, member activity, and curatorial queues.
           </p>
         </div>
-        <span className="text-[11px] text-[#8A8A85] tracking-tight">
-          Last refreshed: Just now
-        </span>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <span className="text-[11px] text-[#8A8A85] tracking-tight hidden md:inline">
+            Last refreshed: Just now
+          </span>
+          <GenerateReportButton />
+        </div>
       </div>
 
       {/* Top Row: 8 Stat Cards (Minimal: Big number + Small label) */}

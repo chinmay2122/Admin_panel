@@ -1,42 +1,38 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useTransition } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import {
-  LayoutGrid,
-  List,
-  Check,
+  Plus,
+  Search,
   X,
   Trash2,
   Edit3,
   CheckCircle2,
   XCircle,
   Archive,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   Palette,
+  Eye,
+  Check,
+  Loader2,
+  ExternalLink,
+  Tag,
+  Maximize2,
+  LayoutGrid,
+  List,
   CheckSquare,
   Square,
   MinusSquare,
-  Layers,
   Sparkles,
+  Flag,
 } from "lucide-react";
+import { TriangleAlertIcon, SaveIcon } from "@/components/ui/icons";
 import { Artwork, ArtworkStatus } from "@/lib/types";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/Table";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
-import { FilterBar, FilterSelectConfig } from "@/components/ui/FilterBar";
 import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
@@ -45,7 +41,17 @@ import {
   updateArtworkAction,
   bulkUpdateArtworksAction,
   deleteArtworkAction,
+  createArtworkAction,
+  createReportAction,
 } from "@/app/admin/actions";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/Table";
 
 interface ArtworksClientProps {
   initialArtworks: Artwork[];
@@ -54,8 +60,6 @@ interface ArtworksClientProps {
 }
 
 type ViewMode = "grid" | "table";
-type SortField = "title" | "creatorName" | "price" | "status" | "createdAt";
-type SortDirection = "asc" | "desc";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -68,14 +72,21 @@ function formatCurrency(amount: number): string {
 function formatDate(dateStr: string): string {
   try {
     const d = new Date(dateStr);
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
+    return new Intl.DateTimeFormat("en-GB", {
       day: "numeric",
+      month: "short",
       year: "numeric",
     }).format(d);
   } catch {
     return dateStr;
   }
+}
+
+function getInitials(name: string): string {
+  if (!name) return "A";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export function ArtworksClient({
@@ -88,21 +99,30 @@ export function ArtworksClient({
   const initialStatusParam = searchParams.get("status") || "all";
 
   const [artworks, setArtworks] = useState<Artwork[]>(initialArtworks);
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [viewingArtwork, setViewingArtwork] = useState<Artwork | null>(null);
 
-  // Filters
-  const [searchQuery, setSearchQuery] = useState("");
+  // Sync direct URL view parameter if present
+  useEffect(() => {
+    const viewId = searchParams.get("view");
+    if (viewId) {
+      const match = artworks.find((a) => a.id === viewId);
+      if (match) setViewingArtwork(match);
+    }
+  }, [searchParams, artworks]);
+
+  // Search & Filters
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialStatusParam);
   const [creatorFilter, setCreatorFilter] = useState("all");
   const [mediumFilter, setMediumFilter] = useState("all");
 
   // Sorting & Pagination
-  const [sortField, setSortField] = useState<SortField>("createdAt");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 12;
 
-  // Selection for bulk actions
+  // Bulk Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Detail Drawer state
@@ -114,16 +134,75 @@ export function ArtworksClient({
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
-  // Edit price/title state
+  // Edit inline state
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editPrice, setEditPrice] = useState("");
+  const [editMedium, setEditMedium] = useState("");
+  const [editDimensions, setEditDimensions] = useState("");
 
   // Delete modal state
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // URL param update sync
+  // Add Artwork modal state
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addForm, setAddForm] = useState({
+    title: "",
+    creatorName: "",
+    creatorId: "",
+    medium: "",
+    dimensions: "",
+    price: "",
+    imageUrl: "",
+    status: "published" as ArtworkStatus,
+  });
+
+  // Report Artwork Modal state
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("Possible copyright infringement");
+  const [reportDetails, setReportDetails] = useState("");
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+
+  const handleSubmitReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!viewingArtwork) return;
+    setIsSubmittingReport(true);
+    try {
+      const res = await createReportAction({
+        artworkId: viewingArtwork.id,
+        reason: reportReason,
+        details: reportDetails,
+        reporterName: "You (Community Member)",
+      });
+      if (res.success) {
+        toast.success(
+          "Report submitted",
+          `Thank you. Your report regarding "${viewingArtwork.title}" has been submitted for moderation.`
+        );
+        setIsReportModalOpen(false);
+        setReportDetails("");
+      } else {
+        toast.error("Failed to submit report", res.error || "Please try again.");
+      }
+    } catch {
+      toast.error("Network error", "Could not submit report.");
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
+
+  // Debounce search query (250ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+      setCurrentPage(1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Sync URL search params
   useEffect(() => {
     const param = searchParams.get("status");
     if (param) {
@@ -131,27 +210,29 @@ export function ArtworksClient({
     }
   }, [searchParams]);
 
-  // Sync edit form with selected artwork
+  // Sync drawer edit form
   useEffect(() => {
     if (selectedArtwork) {
       setEditTitle(selectedArtwork.title);
-      setEditPrice(String(selectedArtwork.price));
+      setEditPrice(String(selectedArtwork.price || 0));
+      setEditMedium(selectedArtwork.medium || "");
+      setEditDimensions(selectedArtwork.dimensions || "");
       setShowRejectForm(false);
       setRejectReason("");
       setIsEditing(false);
     }
   }, [selectedArtwork]);
 
-  // Filtering
+  // Client-side Filtering
   const filteredArtworks = useMemo(() => {
     return artworks.filter((art) => {
-      // Search by title
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        if (
-          !art.title.toLowerCase().includes(q) &&
-          !art.creatorName.toLowerCase().includes(q)
-        ) {
+      // Search by title, creator, or medium
+      if (debouncedSearch.trim()) {
+        const q = debouncedSearch.toLowerCase().trim();
+        const matchesTitle = art.title.toLowerCase().includes(q);
+        const matchesCreator = art.creatorName.toLowerCase().includes(q);
+        const matchesMedium = art.medium.toLowerCase().includes(q);
+        if (!matchesTitle && !matchesCreator && !matchesMedium) {
           return false;
         }
       }
@@ -176,94 +257,56 @@ export function ArtworksClient({
 
       return true;
     });
-  }, [artworks, searchQuery, statusFilter, creatorFilter, mediumFilter]);
+  }, [artworks, debouncedSearch, statusFilter, creatorFilter, mediumFilter]);
 
-  // Sorting
-  const sortedArtworks = useMemo(() => {
-    return [...filteredArtworks].sort((a, b) => {
-      if (sortField === "price") {
-        return sortDirection === "asc" ? a.price - b.price : b.price - a.price;
-      }
-
-      if (sortField === "createdAt") {
-        const timeA = new Date(a.createdAt).getTime();
-        const timeB = new Date(b.createdAt).getTime();
-        return sortDirection === "asc" ? timeA - timeB : timeB - timeA;
-      }
-
-      const aVal = a[sortField] || "";
-      const bVal = b[sortField] || "";
-      return sortDirection === "asc"
-        ? String(aVal).localeCompare(String(bVal))
-        : String(bVal).localeCompare(String(aVal));
-    });
-  }, [filteredArtworks, sortField, sortDirection]);
-
-  // Pagination
+  // Pagination slice
+  const totalPages = Math.ceil(filteredArtworks.length / pageSize) || 1;
   const paginatedArtworks = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
-    return sortedArtworks.slice(start, start + pageSize);
-  }, [sortedArtworks, currentPage, pageSize]);
+    return filteredArtworks.slice(start, start + pageSize);
+  }, [filteredArtworks, currentPage, pageSize]);
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
+  // Status Badge Component
+  const renderStatusBadge = (status: ArtworkStatus) => {
+    switch (status) {
+      case "published":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#EAF2EC] text-[#28633B] border border-[#D4E6D8]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#28633B]" />
+            Published
+          </span>
+        );
+      case "pending":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#FAF5EC] text-[#865E16] border border-[#ECDDBB]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#865E16]" />
+            Pending
+          </span>
+        );
+      case "draft":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#F3F3EF] text-[#71716D] border border-[#E5E5DF]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#71716D]" />
+            Draft
+          </span>
+        );
+      case "rejected":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#FDF3F2] text-[#B83838] border border-[#F4CDCD]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#B83838]" />
+            Rejected
+          </span>
+        );
     }
-    setCurrentPage(1);
   };
 
-  const renderSortIndicator = (field: SortField) => {
-    if (sortField !== field) {
-      return (
-        <ArrowUpDown className="w-3 h-3 text-[#A0A09B] opacity-0 group-hover:opacity-100 transition-opacity" />
-      );
-    }
-    return sortDirection === "asc" ? (
-      <ArrowUp className="w-3 h-3 text-[#B8532F]" />
-    ) : (
-      <ArrowDown className="w-3 h-3 text-[#B8532F]" />
-    );
-  };
-
+  // Open Drawer Handler
   const openDetailDrawer = (art: Artwork) => {
     setSelectedArtwork(art);
     setIsDrawerOpen(true);
   };
 
-  // Status Badge Component adhering to consistent app styling
-  const renderStatusBadge = (status: ArtworkStatus) => {
-    switch (status) {
-      case "published":
-        return (
-          <Badge variant="success" size="sm" dot>
-            Published
-          </Badge>
-        );
-      case "pending":
-        return (
-          <Badge variant="warning" size="sm" dot>
-            Pending
-          </Badge>
-        );
-      case "draft":
-        return (
-          <Badge variant="default" size="sm" dot>
-            Draft
-          </Badge>
-        );
-      case "rejected":
-        return (
-          <Badge variant="danger" size="sm" dot>
-            Rejected
-          </Badge>
-        );
-    }
-  };
-
-  // Single artwork status change (optimistic)
+  // Status Change (Optimistic)
   const handleUpdateStatus = async (nextStatus: ArtworkStatus) => {
     if (!selectedArtwork) return;
     const artTitle = selectedArtwork.title;
@@ -289,7 +332,7 @@ export function ArtworksClient({
         toast.error("Failed to update status", res.error || "Please try again.");
       } else {
         toast.success(
-          "Artwork status updated",
+          "Status updated",
           `"${artTitle}" marked as ${nextStatus}.`
         );
       }
@@ -304,15 +347,17 @@ export function ArtworksClient({
     }
   };
 
-  // Save Title / Price edits (optimistic)
+  // Save Edits
   const handleSaveEdits = async () => {
     if (!selectedArtwork) return;
     const parsedPrice = parseFloat(editPrice) || selectedArtwork.price;
     const previous = { ...selectedArtwork };
-    const updated = {
+    const updated: Artwork = {
       ...selectedArtwork,
       title: editTitle.trim() || selectedArtwork.title,
       price: parsedPrice,
+      medium: editMedium.trim() || selectedArtwork.medium,
+      dimensions: editDimensions.trim() || selectedArtwork.dimensions,
     };
 
     setSelectedArtwork(updated);
@@ -326,6 +371,8 @@ export function ArtworksClient({
       const res = await updateArtworkAction(selectedArtwork.id, {
         title: updated.title,
         price: updated.price,
+        medium: updated.medium,
+        dimensions: updated.dimensions,
       });
       if (!res.success) {
         setSelectedArtwork(previous);
@@ -334,7 +381,7 @@ export function ArtworksClient({
         );
         toast.error("Failed to save changes", res.error || "Please try again.");
       } else {
-        toast.success("Artwork updated", "Title and price updated successfully.");
+        toast.success("Artwork updated", "Changes saved successfully.");
       }
     } catch {
       setSelectedArtwork(previous);
@@ -347,7 +394,7 @@ export function ArtworksClient({
     }
   };
 
-  // Delete single artwork (optimistic)
+  // Delete Artwork
   const handleConfirmDelete = async () => {
     if (!selectedArtwork) return;
     const targetId = selectedArtwork.id;
@@ -366,7 +413,7 @@ export function ArtworksClient({
         setArtworks(previous);
         toast.error("Failed to delete artwork", res.error || "Please try again.");
       } else {
-        toast.success("Artwork deleted", `"${artTitle}" was removed permanently.`);
+        toast.success("Artwork deleted", `"${artTitle}" removed permanently.`);
       }
     } catch {
       setArtworks(previous);
@@ -376,7 +423,110 @@ export function ArtworksClient({
     }
   };
 
-  // Bulk Selection Handlers
+  // Toggle Featured status
+  const handleToggleFeature = async (art: Artwork) => {
+    const nextVal = !art.isFeatured;
+    setArtworks((prev) =>
+      prev.map((a) => (a.id === art.id ? { ...a, isFeatured: nextVal } : a))
+    );
+    try {
+      await updateArtworkAction(art.id, { isFeatured: nextVal } as any);
+      toast.success(
+        nextVal ? "Artwork featured" : "Artwork unfeatured",
+        `"${art.title}" ${nextVal ? "featured on platform" : "unfeatured"}.`
+      );
+    } catch {
+      toast.error("Error", "Could not update featured status.");
+    }
+  };
+
+  // Toggle Visibility (Published / Draft)
+  const handleToggleHide = async (art: Artwork) => {
+    const nextStatus: ArtworkStatus = art.status === "published" ? "draft" : "published";
+    setArtworks((prev) =>
+      prev.map((a) => (a.id === art.id ? { ...a, status: nextStatus } : a))
+    );
+    try {
+      await updateArtworkAction(art.id, { status: nextStatus });
+      toast.success(
+        nextStatus === "draft" ? "Artwork hidden" : "Artwork published",
+        `"${art.title}" is now ${nextStatus === "draft" ? "hidden (draft)" : "published"}.`
+      );
+    } catch {
+      toast.error("Error", "Could not update artwork visibility.");
+    }
+  };
+
+  // Toggle Flagged status
+  const handleToggleFlag = async (art: Artwork) => {
+    const nextVal = !art.isFlagged;
+    setArtworks((prev) =>
+      prev.map((a) => (a.id === art.id ? { ...a, isFlagged: nextVal } : a))
+    );
+    try {
+      await updateArtworkAction(art.id, { isFlagged: nextVal } as any);
+      toast.info(
+        nextVal ? "Artwork flagged" : "Flag cleared",
+        `"${art.title}" ${nextVal ? "flagged for review" : "unflagged"}.`
+      );
+    } catch {
+      toast.error("Error", "Could not update flagged status.");
+    }
+  };
+
+  // Add Artwork Handler
+  const handleAddArtwork = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addForm.title.trim()) {
+      toast.error("Title required", "Please enter an artwork title.");
+      return;
+    }
+    if (!addForm.creatorName.trim()) {
+      toast.error("Creator required", "Please enter a creator name.");
+      return;
+    }
+
+    setIsAdding(true);
+    try {
+      const payload = {
+        title: addForm.title.trim(),
+        creatorName: addForm.creatorName.trim(),
+        creatorId: addForm.creatorId.trim() || undefined,
+        medium: addForm.medium.trim() || "Mixed Media",
+        dimensions: addForm.dimensions.trim() || "Dimensions on request",
+        price: parseFloat(addForm.price) || 0,
+        imageUrl:
+          addForm.imageUrl.trim() ||
+          "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
+        status: addForm.status,
+      };
+
+      const res = await createArtworkAction(payload);
+      if (!res.success || !res.artwork) {
+        toast.error("Failed to create artwork", res.error || "Please try again.");
+      } else {
+        setArtworks((prev) => [res.artwork!, ...prev]);
+        toast.success("Artwork added", `"${res.artwork.title}" added to catalog.`);
+        setIsAddModalOpen(false);
+        setAddForm({
+          title: "",
+          creatorName: "",
+          creatorId: "",
+          medium: "",
+          dimensions: "",
+          price: "",
+          imageUrl: "",
+          status: "published",
+        });
+      }
+    } catch (err: any) {
+      toast.error("Creation error", err.message || "Could not create artwork.");
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  // Bulk Actions
   const handleToggleSelectAll = () => {
     if (selectedIds.size === paginatedArtworks.length && paginatedArtworks.length > 0) {
       setSelectedIds(new Set());
@@ -389,23 +539,18 @@ export function ArtworksClient({
     e.stopPropagation();
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
-  // Bulk actions: Approve or Reject selected artworks (optimistic)
   const handleBulkUpdateStatus = async (status: "published" | "rejected") => {
     if (selectedIds.size === 0) return;
     const targetIds = Array.from(selectedIds);
     const count = targetIds.length;
     const previous = [...artworks];
 
-    // Optimistically update
     setArtworks((prev) =>
       prev.map((a) => (selectedIds.has(a.id) ? { ...a, status } : a))
     );
@@ -415,12 +560,9 @@ export function ArtworksClient({
       const res = await bulkUpdateArtworksAction(targetIds, { status });
       if (!res.success) {
         setArtworks(previous);
-        toast.error("Bulk action failed", res.error || "Could not complete bulk update.");
+        toast.error("Bulk action failed", res.error || "Could not complete update.");
       } else {
-        toast.success(
-          "Bulk update complete",
-          `${count} artworks updated to ${status}.`
-        );
+        toast.success("Bulk update complete", `${count} artworks updated to ${status}.`);
       }
     } catch {
       setArtworks(previous);
@@ -428,135 +570,453 @@ export function ArtworksClient({
     }
   };
 
-  // Filter Bar Options
-  const filterConfigs: FilterSelectConfig[] = [
-    {
-      id: "status",
-      label: "Status",
-      value: statusFilter,
-      onChange: (val) => {
-        setStatusFilter(val);
-        setCurrentPage(1);
-      },
-      options: [
-        { label: "All Statuses", value: "all" },
-        { label: "Published", value: "published" },
-        { label: "Pending", value: "pending" },
-        { label: "Draft", value: "draft" },
-        { label: "Rejected", value: "rejected" },
-      ],
-    },
-    {
-      id: "creator",
-      label: "Creator",
-      value: creatorFilter,
-      onChange: (val) => {
-        setCreatorFilter(val);
-        setCurrentPage(1);
-      },
-      options: [
-        { label: "All Creators", value: "all" },
-        ...distinctCreators.map((c) => ({ label: c, value: c })),
-      ],
-    },
-    {
-      id: "medium",
-      label: "Medium",
-      value: mediumFilter,
-      onChange: (val) => {
-        setMediumFilter(val);
-        setCurrentPage(1);
-      },
-      options: [
-        { label: "All Media", value: "all" },
-        ...distinctMedia.map((m) => ({ label: m, value: m })),
-      ],
-    },
-  ];
-
   const hasActiveFilters =
-    Boolean(searchQuery) ||
+    Boolean(debouncedSearch) ||
     statusFilter !== "all" ||
     creatorFilter !== "all" ||
     mediumFilter !== "all";
 
   const handleResetFilters = () => {
-    setSearchQuery("");
+    setSearchInput("");
+    setDebouncedSearch("");
     setStatusFilter("all");
     setCreatorFilter("all");
     setMediumFilter("all");
     setCurrentPage(1);
   };
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-150">
-      {/* Title & View Mode Toggle */}
-      <div className="border-b border-[#E8E8E3] pb-5 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-3">
-        <div>
-          <h2 className="text-xl md:text-2xl font-medium tracking-tight text-[#141413]">
-            Artworks
-          </h2>
-          <p className="mt-1 text-xs md:text-sm text-[#6E6E69]">
-            Catalog of community submissions, editorial features, and media moderation.
-          </p>
+  const statusPills: { label: string; value: string }[] = [
+    { label: "All", value: "all" },
+    { label: "Published", value: "published" },
+    { label: "Pending", value: "pending" },
+    { label: "Draft", value: "draft" },
+    { label: "Rejected", value: "rejected" },
+  ];
+
+  // If viewing an artwork detail (Discovery view matching Screenshot 2)
+  if (viewingArtwork) {
+    return (
+      <div className="space-y-6 pb-16 animate-in fade-in duration-150">
+        {/* Top-left: Back to discovery button */}
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setViewingArtwork(null)}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-[#D5D3CE] bg-white text-xs font-medium text-[#141413] hover:bg-[#F7F6F2] transition-colors shadow-2xs cursor-pointer select-none"
+          >
+            <span>←</span>
+            <span>Back to discovery</span>
+          </button>
         </div>
 
-        {/* View Switcher: Grid vs Table */}
-        <div className="flex items-center gap-2">
-          <div className="inline-flex items-center p-1 rounded-lg border border-[#E8E8E3] bg-white">
+        {/* 2-Column Discovery Detail Layout matching Screenshot 2 */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-start max-w-6xl mx-auto pt-2">
+          {/* Left Column: Artwork Image framed in soft sand/beige container */}
+          <div className="lg:col-span-6 bg-[#EFECE6] p-6 sm:p-10 md:p-12 rounded-2xl sm:rounded-3xl flex items-center justify-center">
+            <div className="relative w-full aspect-4/5 max-w-md rounded-xl sm:rounded-2xl overflow-hidden shadow-sm bg-neutral-100">
+              <Image
+                src={viewingArtwork.imageUrl}
+                alt={viewingArtwork.title}
+                fill
+                priority
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="object-cover"
+              />
+            </div>
+          </div>
+
+          {/* Right Column: Metadata, Specifications & Actions */}
+          <div className="lg:col-span-6 space-y-5 pt-1">
+            {/* Category / Year */}
+            <p className="text-xs uppercase tracking-wider text-[#73736C] font-medium">
+              {viewingArtwork.medium} / {viewingArtwork.year || "2026"}
+            </p>
+
+            {/* Title */}
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif text-[#141413] tracking-tight leading-tight">
+              {viewingArtwork.title}
+            </h1>
+
+            {/* Creator Byline */}
+            <div className="flex items-center gap-2.5 pt-1">
+              <div className="w-8 h-8 rounded-full bg-[#E5E3DE] text-[#4A4A45] font-semibold text-xs flex items-center justify-center">
+                {getInitials(viewingArtwork.creatorName)}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreatorFilter(viewingArtwork.creatorName);
+                  setViewingArtwork(null);
+                  toast.info(
+                    "Creator Filter",
+                    `Filtering artworks by ${viewingArtwork.creatorName}`
+                  );
+                }}
+                className="text-sm font-medium text-[#141413] hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                <span>{viewingArtwork.creatorName}</span>
+                <span className="text-[#8A8A85] text-xs">↗</span>
+              </button>
+            </div>
+
+            {/* Description */}
+            <p className="text-xs sm:text-sm text-[#5A5A55] leading-relaxed max-w-xl font-normal pt-1">
+              {viewingArtwork.description ||
+                "A study of changing light across urban landscapes. Layered forms reveal fragments of memory and a quieter way of seeing."}
+            </p>
+
+            {/* Specifications Table */}
+            <div className="border-t border-b border-[#E8E6E1] divide-y divide-[#E8E6E1] text-xs sm:text-sm my-6">
+              <div className="py-2.5 flex justify-between items-center">
+                <span className="text-[#73736C]">Medium</span>
+                <span className="text-[#141413] font-medium">{viewingArtwork.medium}</span>
+              </div>
+              <div className="py-2.5 flex justify-between items-center">
+                <span className="text-[#73736C]">Dimensions</span>
+                <span className="text-[#141413] font-medium">{viewingArtwork.dimensions}</span>
+              </div>
+              <div className="py-2.5 flex justify-between items-center">
+                <span className="text-[#73736C]">Year</span>
+                <span className="text-[#141413] font-medium">{viewingArtwork.year || "2026"}</span>
+              </div>
+              <div className="py-2.5 flex justify-between items-center">
+                <span className="text-[#73736C]">Location</span>
+                <span className="text-[#141413] font-medium">{viewingArtwork.location || "Mumbai"}</span>
+              </div>
+              <div className="py-2.5 flex justify-between items-center">
+                <span className="text-[#73736C]">Collection</span>
+                <span className="text-[#141413] font-medium">
+                  {viewingArtwork.collection || "Monsoon Studies"}
+                </span>
+              </div>
+              <div className="py-2.5 flex justify-between items-center">
+                <span className="text-[#73736C]">Availability</span>
+                <span className="text-[#141413] font-medium">
+                  {viewingArtwork.availability ||
+                    (viewingArtwork.status === "published" ? "Available" : "Not for sale")}
+                </span>
+              </div>
+            </div>
+
+            {/* Price */}
+            <div className="pt-1">
+              <p className="text-sm font-semibold text-[#141413]">
+                {viewingArtwork.price > 0
+                  ? formatCurrency(viewingArtwork.price)
+                  : "Price on request"}
+              </p>
+            </div>
+
+            {/* Actions Row */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  toast.success(
+                    "Interest Expressed",
+                    `Your curatorial interest in "${viewingArtwork.title}" has been registered.`
+                  );
+                }}
+                className="px-5 py-2.5 rounded-full bg-[#141413] text-white text-xs sm:text-sm font-medium hover:bg-[#2A2A28] active:bg-black transition-colors inline-flex items-center gap-2 cursor-pointer shadow-xs"
+              >
+                <span>Express Interest</span>
+                <span>→</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreatorFilter(viewingArtwork.creatorName);
+                  setViewingArtwork(null);
+                  toast.info(
+                    "Viewing Creator",
+                    `Navigated to artworks by ${viewingArtwork.creatorName}`
+                  );
+                }}
+                className="px-5 py-2.5 rounded-full bg-white border border-[#D5D3CE] text-xs sm:text-sm font-medium text-[#141413] hover:bg-[#F7F6F2] transition-colors cursor-pointer"
+              >
+                Creator
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  toast.success(
+                    "Saved",
+                    `"${viewingArtwork.title}" has been saved to your curatorial list.`
+                  );
+                }}
+                className="w-10 h-10 rounded-full bg-white border border-[#D5D3CE] text-[#141413] hover:bg-[#F7F6F2] hover:border-[#141413] transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                title="Save artwork"
+                aria-label="Save artwork"
+              >
+                <SaveIcon size={16} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsReportModalOpen(true)}
+                className="group w-10 h-10 rounded-full bg-white border border-[#E8E8E3] text-[#6E6E69] hover:text-red-600 hover:border-red-200 hover:bg-red-50/50 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                title="Report artwork"
+                aria-label="Report artwork"
+              >
+                <TriangleAlertIcon size={16} strokeWidth={2} className="text-[#8A8A85] group-hover:text-red-600 transition-colors" />
+              </button>
+            </div>
+
+            {/* Subtext */}
+            <p className="text-xs text-[#7A7A75] leading-normal pt-3 max-w-lg">
+              A direct connection, not a checkout. Pricing and any acquisition are discussed privately with the creator.
+            </p>
+          </div>
+        </div>
+
+        {/* User-side Report Artwork Modal */}
+        <Modal
+          isOpen={isReportModalOpen}
+          onClose={() => setIsReportModalOpen(false)}
+          title={
+            <div className="flex items-center gap-2">
+              <TriangleAlertIcon size={20} strokeWidth={2} className="text-amber-500" />
+              <span>Report Artwork</span>
+            </div>
+          }
+          description="Help keep the ErasStudio creative community safe, authentic, and respectful."
+          footer={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsReportModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSubmitReport}
+                isLoading={isSubmittingReport}
+              >
+                Submit Report
+              </Button>
+            </>
+          }
+        >
+          <form onSubmit={handleSubmitReport} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-[#141413] mb-1.5">
+                Reason for report *
+              </label>
+              <select
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] focus:outline-none focus:border-[#141413]"
+              >
+                <option value="Possible copyright infringement">Possible copyright infringement</option>
+                <option value="Inappropriate content">Inappropriate content</option>
+                <option value="Incorrect artwork information">Incorrect artwork information</option>
+                <option value="Harassment or offensive content">Harassment or offensive content</option>
+                <option value="Spam or misleading content">Spam or misleading content</option>
+                <option value="Fraud or scam">Fraud or scam</option>
+                <option value="Stolen artwork">Stolen artwork</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#141413] mb-1.5">
+                Additional details (optional)
+              </label>
+              <textarea
+                value={reportDetails}
+                onChange={(e) => setReportDetails(e.target.value)}
+                placeholder="Provide any relevant context, links, or evidence to assist our moderation team..."
+                rows={3}
+                className="w-full text-xs p-3 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] placeholder:text-[#8A8A85] focus:outline-none focus:border-[#141413]"
+              />
+            </div>
+          </form>
+        </Modal>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-150">
+      {/* ========================================================================= */}
+      {/* 1. MAIN HEADER & ADD ARTWORK ACTION */}
+      {/* ========================================================================= */}
+      <div className="border-b border-[#E8E8E3] pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="text-[11px] uppercase tracking-wider font-semibold text-[#8A8A85] mb-1">
+              Workspace / Artworks
+            </div>
+            <h2 className="text-2xl md:text-3xl font-medium tracking-tight text-[#141413]">
+              Artworks
+            </h2>
+            <p className="mt-1 text-xs md:text-sm text-[#6E6E69]">
+              Catalog of community submissions, editorial features, and media moderation.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 self-start sm:self-auto">
+            {/* View Mode Switcher */}
+            <div className="inline-flex items-center p-1 rounded-lg border border-[#E8E8E3] bg-white">
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                aria-label="Grid view"
+                className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                  viewMode === "grid"
+                    ? "bg-[#141413] text-white"
+                    : "text-[#6E6E69] hover:text-[#141413]"
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                aria-label="Table view"
+                className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                  viewMode === "table"
+                    ? "bg-[#141413] text-white"
+                    : "text-[#6E6E69] hover:text-[#141413]"
+                }`}
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* + Add Artwork Button */}
             <button
               type="button"
-              onClick={() => setViewMode("grid")}
-              aria-label="Grid view"
-              className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#B8532F] ${
-                viewMode === "grid"
-                  ? "bg-[#141413] text-white"
-                  : "text-[#6E6E69] hover:text-[#141413]"
-              }`}
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#141413] text-white text-xs font-medium hover:bg-[#2A2A28] active:bg-[#000000] transition-colors shadow-xs cursor-pointer select-none"
             >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("table")}
-              aria-label="Table view"
-              className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#B8532F] ${
-                viewMode === "table"
-                  ? "bg-[#141413] text-white"
-                  : "text-[#6E6E69] hover:text-[#141413]"
-              }`}
-            >
-              <List className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Add Artwork</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Reusable FilterBar */}
-      <FilterBar
-        searchQuery={searchQuery}
-        onSearchChange={(q) => {
-          setSearchQuery(q);
-          setCurrentPage(1);
-        }}
-        searchPlaceholder="Search artworks by title..."
-        filters={filterConfigs}
-        hasActiveFilters={hasActiveFilters}
-        onResetFilters={handleResetFilters}
-      >
-        <span className="text-xs text-[#71716D]">
-          {sortedArtworks.length} {sortedArtworks.length === 1 ? "work" : "works"}
-        </span>
-      </FilterBar>
+      {/* ========================================================================= */}
+      {/* 2. SEARCH & FILTER BAR (iRAS Studio Prototype Style) */}
+      {/* ========================================================================= */}
+      <div className="space-y-3">
+        {/* Search Bar */}
+        <div className="relative w-full">
+          <Search className="w-4 h-4 text-[#8A8A85] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search artworks by title, creator, or medium..."
+            className="w-full text-xs md:text-sm pl-10 pr-9 py-2.5 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] placeholder:text-[#8A8A85] focus:outline-none focus:border-[#B8532F] focus:ring-1 focus:ring-[#B8532F] transition-all shadow-2xs"
+          />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput("");
+                setDebouncedSearch("");
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A8A85] hover:text-[#141413] p-0.5 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
 
-      {/* Bulk Action Bar in Table View */}
+        {/* Filters Row: Status Pills + Dropdowns */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          {/* Status Pills */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {statusPills.map((pill) => {
+              const isActive = statusFilter === pill.value;
+              return (
+                <button
+                  key={pill.value}
+                  type="button"
+                  onClick={() => {
+                    setStatusFilter(pill.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer select-none ${
+                    isActive
+                      ? "bg-[#141413] text-white shadow-2xs"
+                      : "bg-white text-[#6E6E69] border border-[#E8E8E3] hover:text-[#141413] hover:border-[#D0D0CA]"
+                  }`}
+                >
+                  {pill.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Creators & Media Dropdowns */}
+          <div className="flex items-center gap-2">
+            {/* Creator Dropdown */}
+            <select
+              value={creatorFilter}
+              onChange={(e) => {
+                setCreatorFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by creator"
+              className="text-xs px-2.5 py-1.5 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] focus:outline-none focus:border-[#B8532F] cursor-pointer"
+            >
+              <option value="all">All Creators</option>
+              {distinctCreators.map((creator) => (
+                <option key={creator} value={creator}>
+                  {creator}
+                </option>
+              ))}
+            </select>
+
+            {/* Medium Dropdown */}
+            <select
+              value={mediumFilter}
+              onChange={(e) => {
+                setMediumFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by medium"
+              className="text-xs px-2.5 py-1.5 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] focus:outline-none focus:border-[#B8532F] cursor-pointer"
+            >
+              <option value="all">All Media</option>
+              {distinctMedia.map((medium) => (
+                <option key={medium} value={medium}>
+                  {medium}
+                </option>
+              ))}
+            </select>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="text-xs text-[#B8532F] hover:text-[#9E4323] font-medium px-2 py-1 cursor-pointer"
+              >
+                Reset
+              </button>
+            )}
+
+            <span className="text-xs text-[#8A8A85] pl-2 border-l border-[#E8E8E3] hidden sm:inline">
+              {filteredArtworks.length} {filteredArtworks.length === 1 ? "artwork" : "artworks"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 3. BULK ACTION BAR (Table mode) */}
+      {/* ========================================================================= */}
       {viewMode === "table" && selectedIds.size > 0 && (
         <div className="flex items-center justify-between p-3 px-4 bg-[#FAFAF8] border border-[#B8532F]/40 rounded-lg animate-in fade-in duration-150">
           <div className="flex items-center gap-2 text-xs font-medium text-[#141413]">
             <CheckSquare className="w-4 h-4 text-[#B8532F]" />
             <span>
-              {selectedIds.size}{" "}
-              {selectedIds.size === 1 ? "artwork" : "artworks"} selected
+              {selectedIds.size} {selectedIds.size === 1 ? "artwork" : "artworks"} selected
             </span>
           </div>
 
@@ -588,69 +1048,88 @@ export function ArtworksClient({
         </div>
       )}
 
-      {/* Content Rendering: EmptyState, GridView, or TableView */}
-      {sortedArtworks.length === 0 ? (
+      {/* ========================================================================= */}
+      {/* 4. CONTENT RENDERING: EMPTY STATE, GRID OR TABLE */}
+      {/* ========================================================================= */}
+      {filteredArtworks.length === 0 ? (
         <EmptyState
-          icon={<Palette className="w-5 h-5 text-[#8A8A85]" />}
+          icon={<Palette className="w-6 h-6 text-[#8A8A85]" />}
           title="No artworks found"
           description={
             hasActiveFilters
-              ? "No artwork matches your active filter criteria. Try adjusting or resetting filters."
-              : "No artwork has been submitted yet."
+              ? "No artwork matches your active search or filter criteria. Try adjusting or clearing your filters."
+              : "No artwork has been submitted to the catalog yet."
           }
           action={
             hasActiveFilters ? (
               <Button variant="outline" size="sm" onClick={handleResetFilters}>
                 Reset Filters
               </Button>
-            ) : null
+            ) : (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsAddModalOpen(true)}
+                leftIcon={<Plus className="w-3.5 h-3.5" />}
+              >
+                Add First Artwork
+              </Button>
+            )
           }
         />
       ) : viewMode === "grid" ? (
-        /* GRID VIEW (Image Cards with lazy loading) */
+        /* ===================================================================== */
+        /* GRID VIEW: Clean, Compact iRAS Studio Artwork Cards                   */
+        /* ===================================================================== */
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {paginatedArtworks.map((art) => (
               <div
                 key={art.id}
-                onClick={() => openDetailDrawer(art)}
-                className="group bg-white border border-[#E8E8E3] hover:border-[#D0D0CA] rounded-lg overflow-hidden flex flex-col cursor-pointer transition-all duration-150"
+                onClick={() => setViewingArtwork(art)}
+                className="group bg-white border border-[#E8E8E3] hover:border-[#141413] rounded-lg overflow-hidden flex flex-col cursor-pointer transition-all duration-150 shadow-2xs hover:shadow-xs"
               >
-                {/* Image Container with Next.js Image lazy load */}
+                {/* Fixed Dimension Image Container with Next.js Optimization */}
                 <div className="relative aspect-4/3 w-full bg-[#ECECE7] overflow-hidden">
                   <Image
                     src={art.imageUrl}
                     alt={art.title}
                     fill
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                     loading="lazy"
-                    className="object-cover group-hover:scale-103 transition-transform duration-300"
+                    className="object-cover group-hover:scale-[1.02] transition-transform duration-200"
                   />
+                  {/* Subtle Status Pill */}
                   <div className="absolute top-2.5 right-2.5">
                     {renderStatusBadge(art.status)}
                   </div>
+
+                  {/* Subtle Hover Action Pill */}
+                  <div className="absolute inset-0 bg-[#141413]/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 text-[#141413] text-[11px] font-medium shadow-sm backdrop-blur-xs">
+                      <Eye className="w-3 h-3 text-[#B8532F]" />
+                      <span>View Specs</span>
+                    </span>
+                  </div>
                 </div>
 
-                {/* Card Content */}
-                <div className="p-4 flex-1 flex flex-col justify-between space-y-2">
+                {/* Card Text Content */}
+                <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2.5">
                   <div>
-                    <h4 className="text-xs font-medium text-[#141413] group-hover:text-[#B8532F] transition-colors truncate">
+                    <h4 className="text-xs font-semibold text-[#141413] group-hover:text-[#B8532F] transition-colors truncate">
                       {art.title}
                     </h4>
                     <p className="text-[11px] text-[#6E6E69] truncate mt-0.5">
-                      {art.creatorName}
-                    </p>
-                    <p className="text-[11px] text-[#8A8A85] truncate mt-0.5">
-                      {art.medium}
+                      by <span className="font-medium text-[#141413]">{art.creatorName}</span>
                     </p>
                   </div>
 
                   <div className="pt-2 border-t border-[#F0F0EB] flex items-center justify-between text-xs">
-                    <span className="font-semibold text-[#141413]">
-                      {formatCurrency(art.price)}
+                    <span className="text-[11px] text-[#8A8A85] truncate max-w-[120px]">
+                      {art.medium}
                     </span>
-                    <span className="text-[10px] text-[#8A8A85]">
-                      {art.dimensions}
+                    <span className="font-semibold text-[#141413]">
+                      {art.price ? formatCurrency(art.price) : "—"}
                     </span>
                   </div>
                 </div>
@@ -658,15 +1137,24 @@ export function ArtworksClient({
             ))}
           </div>
 
-          <Pagination
-            currentPage={currentPage}
-            totalItems={sortedArtworks.length}
-            pageSize={pageSize}
-            onPageChange={(page) => setCurrentPage(page)}
-          />
+          {/* Pagination */}
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-[#E8E8E3]">
+            <span className="text-xs text-[#6E6E69]">
+              Showing {Math.min((currentPage - 1) * pageSize + 1, filteredArtworks.length)}–
+              {Math.min(currentPage * pageSize, filteredArtworks.length)} of {filteredArtworks.length} artworks
+            </span>
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredArtworks.length}
+              pageSize={pageSize}
+              onPageChange={(page) => setCurrentPage(page)}
+            />
+          </div>
         </div>
       ) : (
-        /* TABLE VIEW (with bulk selection) */
+        /* ===================================================================== */
+        /* TABLE VIEW (Alternative view mode)                                    */
+        /* ===================================================================== */
         <div className="space-y-4">
           <Table>
             <TableHeader>
@@ -687,53 +1175,13 @@ export function ArtworksClient({
                     )}
                   </button>
                 </TableHead>
-                <TableHead>
-                  <button
-                    onClick={() => handleSort("title")}
-                    className="group inline-flex items-center gap-1.5 hover:text-[#141413] cursor-pointer"
-                  >
-                    <span>Artwork</span>
-                    {renderSortIndicator("title")}
-                  </button>
-                </TableHead>
-                <TableHead>
-                  <button
-                    onClick={() => handleSort("creatorName")}
-                    className="group inline-flex items-center gap-1.5 hover:text-[#141413] cursor-pointer"
-                  >
-                    <span>Creator</span>
-                    {renderSortIndicator("creatorName")}
-                  </button>
-                </TableHead>
+                <TableHead>Artwork</TableHead>
+                <TableHead>Artist</TableHead>
                 <TableHead>Medium</TableHead>
-                <TableHead>Dimensions</TableHead>
-                <TableHead>
-                  <button
-                    onClick={() => handleSort("price")}
-                    className="group inline-flex items-center gap-1.5 hover:text-[#141413] cursor-pointer"
-                  >
-                    <span>Price</span>
-                    {renderSortIndicator("price")}
-                  </button>
-                </TableHead>
-                <TableHead>
-                  <button
-                    onClick={() => handleSort("status")}
-                    className="group inline-flex items-center gap-1.5 hover:text-[#141413] cursor-pointer"
-                  >
-                    <span>Status</span>
-                    {renderSortIndicator("status")}
-                  </button>
-                </TableHead>
-                <TableHead>
-                  <button
-                    onClick={() => handleSort("createdAt")}
-                    className="group inline-flex items-center gap-1.5 hover:text-[#141413] cursor-pointer"
-                  >
-                    <span>Created</span>
-                    {renderSortIndicator("createdAt")}
-                  </button>
-                </TableHead>
+                <TableHead>Availability</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right pr-6">Actions</TableHead>
               </tr>
             </TableHeader>
             <TableBody>
@@ -742,10 +1190,9 @@ export function ArtworksClient({
                 return (
                   <TableRow
                     key={art.id}
-                    onClick={() => openDetailDrawer(art)}
-                    className="cursor-pointer"
+                    onClick={() => setViewingArtwork(art)}
+                    className="cursor-pointer hover:bg-[#FAF9F5] transition-colors"
                   >
-                    {/* Checkbox */}
                     <TableCell onClick={(e) => handleToggleSelectRow(art.id, e)}>
                       <button
                         type="button"
@@ -760,56 +1207,91 @@ export function ArtworksClient({
                       </button>
                     </TableCell>
 
-                    {/* Artwork with Thumbnail */}
                     <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-10 h-10 rounded-md bg-[#ECECE7] overflow-hidden shrink-0">
+                      <div className="flex items-center gap-3.5">
+                        <div className="relative w-12 h-12 rounded-lg bg-[#ECECE7] overflow-hidden shrink-0">
                           <Image
                             src={art.imageUrl}
                             alt={art.title}
                             fill
-                            sizes="40px"
+                            sizes="48px"
                             loading="lazy"
                             className="object-cover"
                           />
                         </div>
-                        <div className="min-w-0 max-w-[200px]">
-                          <p className="font-medium text-[#141413] truncate">
-                            {art.title}
-                          </p>
-                          <p className="text-[11px] text-[#71716D] truncate">
-                            ID: {art.id}
-                          </p>
-                        </div>
+                        <span className="font-semibold text-sm text-[#141413] whitespace-nowrap">
+                          {art.title}
+                        </span>
                       </div>
                     </TableCell>
 
-                    {/* Creator */}
-                    <TableCell className="text-[#52524E]">
+                    <TableCell className="text-sm text-[#141413] whitespace-nowrap">
                       {art.creatorName}
                     </TableCell>
 
-                    {/* Medium */}
-                    <TableCell className="text-[#6E6E69] text-xs max-w-[160px] truncate">
+                    <TableCell className="text-sm text-[#141413] whitespace-nowrap">
                       {art.medium}
                     </TableCell>
 
-                    {/* Dimensions */}
-                    <TableCell className="text-[#6E6E69] text-xs whitespace-nowrap">
-                      {art.dimensions}
+                    <TableCell className="text-sm text-[#141413] whitespace-nowrap">
+                      {art.availability || (art.status === "published" ? "Available" : "Not for sale")}
                     </TableCell>
 
-                    {/* Price */}
-                    <TableCell className="font-semibold text-[#141413]">
-                      {formatCurrency(art.price)}
-                    </TableCell>
-
-                    {/* Status */}
-                    <TableCell>{renderStatusBadge(art.status)}</TableCell>
-
-                    {/* Created Date */}
-                    <TableCell className="text-xs text-[#6E6E69] whitespace-nowrap">
+                    <TableCell className="text-sm text-[#141413] whitespace-nowrap">
                       {formatDate(art.createdAt)}
+                    </TableCell>
+
+                    <TableCell>
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-[#EFEFEF] text-[#4A4A48] select-none capitalize">
+                        {art.status === "published" ? "Published" : art.status}
+                      </span>
+                    </TableCell>
+
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="inline-flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setViewingArtwork(art)}
+                          className="px-3.5 py-1 rounded-full border border-[#D5D5D0] text-xs font-normal text-[#141413] bg-white hover:bg-[#F5F5F3] transition-colors cursor-pointer select-none"
+                        >
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFeature(art)}
+                          className="px-3.5 py-1 rounded-full border border-[#D5D5D0] text-xs font-normal text-[#141413] bg-white hover:bg-[#F5F5F3] transition-colors cursor-pointer select-none"
+                        >
+                          {art.isFeatured ? "Unfeature" : "Feature"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleHide(art)}
+                          className="px-3.5 py-1 rounded-full border border-[#D5D5D0] text-xs font-normal text-[#141413] bg-white hover:bg-[#F5F5F3] transition-colors cursor-pointer select-none"
+                        >
+                          {art.status === "published" ? "Hide" : "Show"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedArtwork(art);
+                            setIsDeleteModalOpen(true);
+                          }}
+                          className="px-3.5 py-1 rounded-full border border-[#D5D5D0] text-xs font-normal text-[#141413] bg-white hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors cursor-pointer select-none"
+                        >
+                          Remove
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFlag(art)}
+                          className={`px-3.5 py-1 rounded-full border text-xs font-normal transition-colors cursor-pointer select-none ${
+                            art.isFlagged
+                              ? "bg-amber-50 text-amber-700 border-amber-300"
+                              : "border-[#D5D5D0] text-[#141413] bg-white hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200"
+                          }`}
+                        >
+                          {art.isFlagged ? "Flagged" : "Flag"}
+                        </button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -817,16 +1299,24 @@ export function ArtworksClient({
             </TableBody>
           </Table>
 
-          <Pagination
-            currentPage={currentPage}
-            totalItems={sortedArtworks.length}
-            pageSize={pageSize}
-            onPageChange={(page) => setCurrentPage(page)}
-          />
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-[#E8E8E3]">
+            <span className="text-xs text-[#6E6E69]">
+              Showing {Math.min((currentPage - 1) * pageSize + 1, filteredArtworks.length)}–
+              {Math.min(currentPage * pageSize, filteredArtworks.length)} of {filteredArtworks.length} artworks
+            </span>
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredArtworks.length}
+              pageSize={pageSize}
+              onPageChange={(page) => setCurrentPage(page)}
+            />
+          </div>
         </div>
       )}
 
-      {/* DETAIL DRAWER */}
+      {/* ========================================================================= */}
+      {/* 5. RIGHT DETAIL DRAWER (iRAS Studio Prototype Style)                      */}
+      {/* ========================================================================= */}
       <Drawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
@@ -885,13 +1375,13 @@ export function ArtworksClient({
       >
         {selectedArtwork && (
           <div className="space-y-6">
-            {/* Large Image with Next.js Image */}
+            {/* Artwork Image Container */}
             <div className="relative aspect-16/10 w-full rounded-lg bg-[#ECECE7] overflow-hidden border border-[#E8E8E3]">
               <Image
                 src={selectedArtwork.imageUrl}
                 alt={selectedArtwork.title}
                 fill
-                sizes="(max-width: 768px) 100vw, 600px"
+                sizes="(max-width: 768px) 100vw, 500px"
                 className="object-cover"
                 priority
               />
@@ -900,7 +1390,7 @@ export function ArtworksClient({
               </div>
             </div>
 
-            {/* Quick Title & Price Banner with Edit Trigger */}
+            {/* Title, Creator & Price Header */}
             <div className="p-4 bg-[#FAFAF8] border border-[#E8E8E3] rounded-lg space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -914,7 +1404,7 @@ export function ArtworksClient({
 
                 <div className="text-right shrink-0">
                   <span className="text-base font-semibold text-[#141413]">
-                    {formatCurrency(selectedArtwork.price)}
+                    {selectedArtwork.price ? formatCurrency(selectedArtwork.price) : "Price on request"}
                   </span>
                   <div className="mt-1">
                     <button
@@ -923,7 +1413,7 @@ export function ArtworksClient({
                       className="inline-flex items-center gap-1 text-[11px] text-[#B8532F] hover:text-[#9E4323] cursor-pointer"
                     >
                       <Edit3 className="w-3 h-3" />
-                      <span>{isEditing ? "Close Edit" : "Edit Title/Price"}</span>
+                      <span>{isEditing ? "Close Edit" : "Edit Details"}</span>
                     </button>
                   </div>
                 </div>
@@ -937,11 +1427,23 @@ export function ArtworksClient({
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
                   />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      label="Price (USD)"
+                      type="number"
+                      value={editPrice}
+                      onChange={(e) => setEditPrice(e.target.value)}
+                    />
+                    <Input
+                      label="Medium"
+                      value={editMedium}
+                      onChange={(e) => setEditMedium(e.target.value)}
+                    />
+                  </div>
                   <Input
-                    label="Price (USD)"
-                    type="number"
-                    value={editPrice}
-                    onChange={(e) => setEditPrice(e.target.value)}
+                    label="Physical Dimensions"
+                    value={editDimensions}
+                    onChange={(e) => setEditDimensions(e.target.value)}
                   />
                   <div className="flex items-center justify-end gap-2 pt-1">
                     <Button
@@ -964,7 +1466,7 @@ export function ArtworksClient({
               )}
             </div>
 
-            {/* Reject Form with Reason Field */}
+            {/* Rejection Form */}
             {showRejectForm && (
               <div className="p-4 rounded-lg bg-[#FDF2F2] border border-[#F2C6C6] space-y-3 animate-in fade-in duration-150">
                 <div className="flex items-center justify-between">
@@ -1003,9 +1505,9 @@ export function ArtworksClient({
               </div>
             )}
 
-            {/* Metadata Attributes */}
+            {/* Specifications Section */}
             <div className="space-y-3 text-xs">
-              <h5 className="font-medium text-[#141413] uppercase tracking-wider text-[11px] text-[#8A8A85]">
+              <h5 className="font-semibold text-[#141413] uppercase tracking-wider text-[11px] text-[#8A8A85]">
                 Specifications
               </h5>
 
@@ -1016,12 +1518,14 @@ export function ArtworksClient({
                 </span>
               </div>
 
-              <div className="flex items-center justify-between py-2 border-b border-[#F0F0EB]">
-                <span className="text-[#6E6E69]">Creator ID</span>
-                <span className="font-mono text-[11px] text-[#141413] bg-[#F5F5F0] px-1.5 py-0.5 rounded">
-                  {selectedArtwork.creatorId}
-                </span>
-              </div>
+              {selectedArtwork.creatorId && (
+                <div className="flex items-center justify-between py-2 border-b border-[#F0F0EB]">
+                  <span className="text-[#6E6E69]">Creator ID</span>
+                  <span className="font-mono text-[11px] text-[#141413] bg-[#F5F5F0] px-1.5 py-0.5 rounded">
+                    {selectedArtwork.creatorId}
+                  </span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between py-2 border-b border-[#F0F0EB]">
                 <span className="text-[#6E6E69]">Medium</span>
@@ -1030,12 +1534,14 @@ export function ArtworksClient({
                 </span>
               </div>
 
-              <div className="flex items-center justify-between py-2 border-b border-[#F0F0EB]">
-                <span className="text-[#6E6E69]">Physical Dimensions</span>
-                <span className="font-medium text-[#141413]">
-                  {selectedArtwork.dimensions}
-                </span>
-              </div>
+              {selectedArtwork.dimensions && (
+                <div className="flex items-center justify-between py-2 border-b border-[#F0F0EB]">
+                  <span className="text-[#6E6E69]">Physical Dimensions</span>
+                  <span className="font-medium text-[#141413]">
+                    {selectedArtwork.dimensions}
+                  </span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between py-2 border-b border-[#F0F0EB]">
                 <span className="text-[#6E6E69]">Submitted Date</span>
@@ -1043,19 +1549,174 @@ export function ArtworksClient({
                   {formatDate(selectedArtwork.createdAt)}
                 </span>
               </div>
+
+              <div className="flex items-center justify-between py-2 border-b border-[#F0F0EB]">
+                <span className="text-[#6E6E69]">Catalog Availability</span>
+                <span className="font-medium text-[#141413]">
+                  {selectedArtwork.status === "published" ? "Available for collectors" : "Restricted / Internal"}
+                </span>
+              </div>
             </div>
           </div>
         )}
       </Drawer>
 
-      {/* Delete Confirmation Modal */}
+      {/* ========================================================================= */}
+      {/* 6. ADD ARTWORK MODAL                                                      */}
+      {/* ========================================================================= */}
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={() => {
+          if (!isAdding) setIsAddModalOpen(false);
+        }}
+        title="Add Artwork to Catalog"
+        description="Register a new curated piece with media specifications and publication status."
+        maxWidth="lg"
+      >
+        <form onSubmit={handleAddArtwork} className="space-y-4 py-1">
+          <div className="space-y-3 text-xs">
+            <Input
+              label="Artwork Title *"
+              required
+              placeholder="e.g. Resonance in Ochre IV"
+              value={addForm.title}
+              onChange={(e) => setAddForm((prev) => ({ ...prev, title: e.target.value }))}
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-[#141413] mb-1">
+                  Creator Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  list="creators-datalist"
+                  placeholder="e.g. Sora Takahashi"
+                  value={addForm.creatorName}
+                  onChange={(e) => setAddForm((prev) => ({ ...prev, creatorName: e.target.value }))}
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] placeholder:text-[#8A8A85] focus:outline-none focus:border-[#B8532F] focus:ring-1 focus:ring-[#B8532F]"
+                />
+                <datalist id="creators-datalist">
+                  {distinctCreators.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#141413] mb-1">
+                  Primary Medium / Category *
+                </label>
+                <input
+                  type="text"
+                  required
+                  list="media-datalist"
+                  placeholder="e.g. Cast Bronze & Acoustic Transducer"
+                  value={addForm.medium}
+                  onChange={(e) => setAddForm((prev) => ({ ...prev, medium: e.target.value }))}
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] placeholder:text-[#8A8A85] focus:outline-none focus:border-[#B8532F] focus:ring-1 focus:ring-[#B8532F]"
+                />
+                <datalist id="media-datalist">
+                  {distinctMedia.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                label="Physical Dimensions"
+                placeholder="e.g. 120 x 85 x 40 cm"
+                value={addForm.dimensions}
+                onChange={(e) => setAddForm((prev) => ({ ...prev, dimensions: e.target.value }))}
+              />
+              <Input
+                label="Price (USD)"
+                type="number"
+                placeholder="e.g. 6800"
+                value={addForm.price}
+                onChange={(e) => setAddForm((prev) => ({ ...prev, price: e.target.value }))}
+              />
+            </div>
+
+            <Input
+              label="Artwork Image URL *"
+              required
+              placeholder="https://images.unsplash.com/..."
+              value={addForm.imageUrl}
+              onChange={(e) => setAddForm((prev) => ({ ...prev, imageUrl: e.target.value }))}
+            />
+
+            {/* Quick Image Preview */}
+            {addForm.imageUrl && (
+              <div className="relative aspect-16/9 w-full rounded-lg overflow-hidden border border-[#E8E8E3] bg-[#ECECE7]">
+                <img
+                  src={addForm.imageUrl}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = "none";
+                  }}
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-[#141413] mb-1">
+                Initial Publication Status
+              </label>
+              <select
+                value={addForm.status}
+                onChange={(e) =>
+                  setAddForm((prev) => ({
+                    ...prev,
+                    status: e.target.value as ArtworkStatus,
+                  }))
+                }
+                className="w-full text-xs px-3 py-2 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] focus:outline-none focus:border-[#B8532F]"
+              >
+                <option value="published">Published (Immediately available)</option>
+                <option value="pending">Pending Curatorial Review</option>
+                <option value="draft">Draft (Restricted view)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E8E8E3]">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddModalOpen(false)}
+              disabled={isAdding}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              isLoading={isAdding}
+              leftIcon={<Plus className="w-3.5 h-3.5" />}
+            >
+              Add Artwork
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* 7. DELETE CONFIRMATION MODAL                                             */}
+      {/* ========================================================================= */}
       <Modal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
-        title="Confirm Artwork Deletion"
-        description="Permanently delete this piece from the catalog."
+        title="Delete artwork?"
+        description="This action cannot be undone."
         footer={
-          <>
+          <div className="flex items-center justify-end gap-2 w-full">
             <Button
               variant="outline"
               size="sm"
@@ -1073,7 +1734,7 @@ export function ArtworksClient({
             >
               Delete Artwork
             </Button>
-          </>
+          </div>
         }
       >
         <div className="space-y-3 text-xs text-[#52524E]">
@@ -1085,7 +1746,7 @@ export function ArtworksClient({
             by {selectedArtwork?.creatorName}?
           </p>
           <p className="text-[11px] text-[#71716D]">
-            This will remove the artwork from all exhibitions, collector bookmarks,
+            This will permanently remove the piece from all exhibitions, collector bookmarks,
             and catalog archives immediately.
           </p>
         </div>

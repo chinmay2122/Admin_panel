@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+import { isAdminOrModerator } from "@/lib/security/rbac";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -13,11 +14,19 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
-    // All other /api/admin/* routes reject unauthenticated requests with 401 JSON
+    // Require valid authentication
     if (!session) {
       return NextResponse.json(
         { error: "Unauthorized. Admin session required." },
         { status: 401 }
+      );
+    }
+
+    // Require administrative or moderator role
+    if (!isAdminOrModerator(session.role)) {
+      return NextResponse.json(
+        { error: "Forbidden. Administrative privileges required." },
+        { status: 403 }
       );
     }
 
@@ -27,18 +36,18 @@ export async function middleware(request: NextRequest) {
   // 2. Dashboard UI Route Protection (/admin/*)
   const isLoginPage = pathname === "/admin/login";
 
-  // If user is already authenticated and visits the login page, redirect to overview
+  // If user is already authenticated with valid admin role and visits login, redirect to overview
   if (isLoginPage) {
-    if (session) {
+    if (session && isAdminOrModerator(session.role)) {
       const overviewUrl = new URL("/admin/overview", request.url);
       return NextResponse.redirect(overviewUrl);
     }
     return NextResponse.next();
   }
 
-  // Protect all other /admin/* routes: redirect unauthenticated users to login
+  // Protect all other /admin/* routes: redirect unauthenticated or non-admin users to login
   if (pathname.startsWith("/admin")) {
-    if (!session) {
+    if (!session || !isAdminOrModerator(session.role)) {
       const loginUrl = new URL("/admin/login", request.url);
       return NextResponse.redirect(loginUrl);
     }

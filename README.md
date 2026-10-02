@@ -1,6 +1,6 @@
-# iRAS Studio® — Admin Panel
+# ErasStudio® — Admin Panel
 
-A minimalist, calm, and responsive admin dashboard for **iRAS Studio®**, an exclusive creative community platform connecting artists, collectors, and cultural institutions.
+A minimalist, calm, and responsive admin dashboard for **ErasStudio®**, an exclusive creative community platform connecting artists, collectors, and cultural institutions.
 
 ---
 
@@ -79,55 +79,108 @@ Built with an editorial aesthetic:
 
 ## ✦ Environment Variables
 
-Create a `.env.local` file in the root of the project with the following variables:
+The project uses `.env.local` for local environment configuration. The Supabase connection keys are already configured:
 
 ```env
 # Admin authentication credentials
 ADMIN_USERNAME=admin123
 ADMIN_PASSWORD=admin2005
 
-# JWT Secret for signing session cookies (minimum 32 characters)
-SESSION_SECRET=iras_studio_super_secret_jwt_key_2026_secure_random_seed_987654321
+# JWT Secret for signing session cookies
+SESSION_SECRET=erasstudio_super_secret_jwt_key_2026_secure_random_seed_987654321
 
-# Optional: Supabase configuration (when connecting a live database)
-# NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-# NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-# SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+# Supabase Database Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://uswuqczfbypzefndsifu.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...
 ```
 
-> **Security Note:** Never commit `.env.local` or expose `ADMIN_PASSWORD` or `SESSION_SECRET` in client-side code.
+> **Security Note:** Never commit `.env.local` to public repositories.
 
 ---
 
-## ✦ Getting Started Locally
+## ✦ Getting Started Locally (Step-by-Step)
 
-### 1. Install dependencies
+Follow these exact steps to run the application locally on your machine:
+
+### Step 1: Open Your Terminal
+Open PowerShell, Command Prompt, or VS Code integrated terminal in the project root directory:
+```bash
+cd c:\Users\Lenovo\Downloads\admin_panel
+```
+
+### Step 2: Install Dependencies (If Not Already Installed)
 ```bash
 npm install
 ```
+*(On Windows PowerShell, if `npm` gives an execution policy error, run `npm.cmd install`)*
 
-### 2. Run the development server
+### Step 3: Start the Development Server
 ```bash
 npm run dev
 ```
+*(On Windows PowerShell, if `npm.ps1 cannot be loaded` appears, run `npm.cmd run dev`)*
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+You will see output similar to:
+```
+▲ Next.js 16.3.7 (Turbopack)
+- Local:        http://localhost:3000
+- Environments: .env.local
+✓ Starting...
+✓ Ready in 1.5s
+```
 
-- **Admin Login:** [http://localhost:3000/admin/login](http://localhost:3000/admin/login)
-- **Default Username:** `admin123`
-- **Default Password:** `admin2005`
+### Step 4: Open in Your Browser
+Open your browser and navigate to:
+* **Admin Login:** [http://localhost:3000/admin/login](http://localhost:3000/admin/login)
+* **Main Dashboard:** [http://localhost:3000/admin/overview](http://localhost:3000/admin/overview)
 
-### 3. Build for production
+### Step 5: Sign In with Default Admin Credentials
+* **Username:** `admin123`
+* **Password:** `admin2005`
+
+### Step 6: Verify Live Supabase Connection
+Once logged in, verify your live database connection:
+1. Look at the top-right header: you will see a badge with a green pulsing dot: **`Supabase Live`**.
+2. Click **"Artworks"** in the sidebar: you will see your live Supabase artwork (**`python`** by **`Viresh`**, $500).
+3. Click **"Creators"** in the sidebar: you will see your live Supabase creator (**`viresh`**).
+
+---
+
+## ✦ Helpful Commands & Troubleshooting
+
+### Building for Production
+To test a production build locally:
 ```bash
 npm run build
 npm run start
 ```
+*(or `npm.cmd run build` and `npm.cmd run start` on Windows)*
+
+### Windows PowerShell "File npm.ps1 cannot be loaded"
+If your Windows PowerShell restricts script execution, you can either:
+1. Run with `.cmd`:
+   ```powershell
+   npm.cmd run dev
+   ```
+2. Or temporarily permit scripts in the current PowerShell session:
+   ```powershell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+   npm run dev
+   ```
+
+### Port 3000 Already in Use?
+If port 3000 is occupied by another app, start on a custom port:
+```bash
+npm run dev -- -p 3001
+```
+Then visit [http://localhost:3001/admin](http://localhost:3001/admin).
 
 ---
 
 ## ✦ Deploying to Vercel
 
-Deploying the iRAS Studio Admin Panel to Vercel takes less than 2 minutes:
+Deploying the ErasStudio Admin Panel to Vercel takes less than 2 minutes:
 
 ### Option A: Using the Vercel Dashboard (Recommended)
 
@@ -135,7 +188,7 @@ Deploying the iRAS Studio Admin Panel to Vercel takes less than 2 minutes:
    ```bash
    git init
    git add .
-   git commit -m "feat: initial commit of iRAS Studio admin panel"
+   git commit -m "feat: initial commit of ErasStudio admin panel"
    git branch -M main
    git remote add origin https://github.com/<your-username>/<your-repo>.git
    git push -u origin main

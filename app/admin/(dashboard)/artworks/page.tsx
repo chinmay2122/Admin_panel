@@ -1,4 +1,4 @@
-git initimport React, { Suspense } from "react";
+import React, { Suspense } from "react";
 import { artworksRepo } from "@/lib/data";
 import { ArtworksClient } from "./ArtworksClient";
 import { Skeleton } from "@/components/ui/Skeleton";

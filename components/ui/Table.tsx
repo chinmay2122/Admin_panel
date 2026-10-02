@@ -1,12 +1,17 @@
 import React from "react";
 
+export interface TableProps extends React.TableHTMLAttributes<HTMLTableElement> {
+  containerClassName?: string;
+}
+
 export function Table({
   children,
   className = "",
+  containerClassName = "",
   ...props
-}: React.TableHTMLAttributes<HTMLTableElement>) {
+}: TableProps) {
   return (
-    <div className="w-full overflow-x-auto border border-[#E8E8E3] rounded-lg bg-white">
+    <div className={`w-full border border-[#E8E8E3] rounded-lg bg-white ${containerClassName || "overflow-x-auto"}`}>
       <table className={`w-full border-collapse text-left ${className}`} {...props}>
         {children}
       </table>

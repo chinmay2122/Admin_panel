@@ -5,14 +5,8 @@ import {
   createSessionToken,
   COOKIE_OPTIONS,
 } from "@/lib/auth";
-
-interface RateLimitRecord {
-  count: number;
-  resetAt: number;
-}
-
-// In-memory rate limiting store: 5 attempts per minute per IP
-const loginAttempts = new Map<string, RateLimitRecord>();
+import { globalRateLimiter, RATE_LIMIT_CONFIGS } from "@/lib/security/rateLimit";
+import { reportsRepo } from "@/lib/data";
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -26,60 +20,14 @@ function getClientIp(request: NextRequest): string {
   return "127.0.0.1";
 }
 
-function checkRateLimit(ip: string): {
-  allowed: boolean;
-  remaining: number;
-  resetSeconds: number;
-} {
-  const now = Date.now();
-  const windowMs = 60 * 1000; // 1 minute
-  const maxAttempts = 5;
-
-  // Prune expired entries
-  if (loginAttempts.size > 500) {
-    for (const [key, value] of loginAttempts.entries()) {
-      if (value.resetAt < now) {
-        loginAttempts.delete(key);
-      }
-    }
-  }
-
-  const record = loginAttempts.get(ip);
-
-  if (!record || record.resetAt < now) {
-    loginAttempts.set(ip, {
-      count: 1,
-      resetAt: now + windowMs,
-    });
-    return {
-      allowed: true,
-      remaining: maxAttempts - 1,
-      resetSeconds: 60,
-    };
-  }
-
-  if (record.count >= maxAttempts) {
-    const resetSeconds = Math.max(1, Math.ceil((record.resetAt - now) / 1000));
-    return {
-      allowed: false,
-      remaining: 0,
-      resetSeconds,
-    };
-  }
-
-  record.count += 1;
-  const resetSeconds = Math.max(1, Math.ceil((record.resetAt - now) / 1000));
-  return {
-    allowed: true,
-    remaining: maxAttempts - record.count,
-    resetSeconds,
-  };
-}
-
 export async function POST(request: NextRequest) {
   try {
     const clientIp = getClientIp(request);
-    const rateLimit = checkRateLimit(clientIp);
+    const rateLimit = globalRateLimiter.check(
+      `login_${clientIp}`,
+      RATE_LIMIT_CONFIGS.LOGIN.limit,
+      RATE_LIMIT_CONFIGS.LOGIN.windowMs
+    );
 
     if (!rateLimit.allowed) {
       return NextResponse.json(
@@ -90,7 +38,7 @@ export async function POST(request: NextRequest) {
           status: 429,
           headers: {
             "Retry-After": rateLimit.resetSeconds.toString(),
-            "X-RateLimit-Limit": "5",
+            "X-RateLimit-Limit": RATE_LIMIT_CONFIGS.LOGIN.limit.toString(),
             "X-RateLimit-Remaining": "0",
             "X-RateLimit-Reset": rateLimit.resetSeconds.toString(),
           },
@@ -98,16 +46,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { username, password } = body || {};
 
-    if (!username || !password) {
+    if (!username || !password || typeof username !== "string" || typeof password !== "string") {
       return NextResponse.json(
         { error: "Username and password are required." },
         {
           status: 400,
           headers: {
-            "X-RateLimit-Limit": "5",
+            "X-RateLimit-Limit": RATE_LIMIT_CONFIGS.LOGIN.limit.toString(),
             "X-RateLimit-Remaining": rateLimit.remaining.toString(),
           },
         }
@@ -122,7 +70,7 @@ export async function POST(request: NextRequest) {
         {
           status: 401,
           headers: {
-            "X-RateLimit-Limit": "5",
+            "X-RateLimit-Limit": RATE_LIMIT_CONFIGS.LOGIN.limit.toString(),
             "X-RateLimit-Remaining": rateLimit.remaining.toString(),
           },
         }
@@ -130,8 +78,9 @@ export async function POST(request: NextRequest) {
     }
 
     const token = await createSessionToken({
+      id: verification.user.id || "adm_01",
       username: username.trim(),
-      role: "admin",
+      role: (verification.user.role as any) || "super_admin",
       name: verification.user.name,
       email: verification.user.email,
     });
@@ -147,8 +96,15 @@ export async function POST(request: NextRequest) {
       maxAge: COOKIE_OPTIONS.maxAge,
     });
 
-    // Reset rate limit on successful authentication
-    loginAttempts.delete(clientIp);
+    // Reset failed login rate limit on successful authentication
+    globalRateLimiter.reset(`login_${clientIp}`);
+
+    // Log admin login event into tamper-resistant audit trail (without storing secrets)
+    await reportsRepo.logAudit({
+      adminId: verification.user.id || "adm_01",
+      action: "admin_login" as any,
+      note: `Administrator '${verification.user.name}' authenticated successfully from IP ${clientIp}.`,
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

@@ -60,6 +60,7 @@ export function JobsClient({ initialJobs }: JobsClientProps) {
     type: "contract",
     location: "",
     status: "open" as JobStatus,
+    isProOnly: true,
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -105,6 +106,7 @@ export function JobsClient({ initialJobs }: JobsClientProps) {
       type: "contract",
       location: "",
       status: "open",
+      isProOnly: true,
     });
     setFormErrors({});
     setIsModalOpen(true);
@@ -119,6 +121,7 @@ export function JobsClient({ initialJobs }: JobsClientProps) {
       type: job.type,
       location: job.location,
       status: job.status,
+      isProOnly: job.isProOnly ?? true,
     });
     setFormErrors({});
     setIsModalOpen(true);
@@ -351,7 +354,14 @@ export function JobsClient({ initialJobs }: JobsClientProps) {
                 <TableRow key={job.id}>
                   {/* Title */}
                   <TableCell>
-                    <p className="font-medium text-[#141413]">{job.title}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-[#141413]">{job.title}</p>
+                      {job.isProOnly && (
+                        <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-[#B8532F]/10 text-[#B8532F] border border-[#B8532F]/25">
+                          Pro Only
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-[#71716D]">ID: {job.id}</p>
                   </TableCell>
 
@@ -550,6 +560,26 @@ export function JobsClient({ initialJobs }: JobsClientProps) {
             placeholder="e.g. Kyoto / Remote"
             required
           />
+
+          <div className="pt-3 border-t border-[#E8E8E3] flex items-center justify-between">
+            <div className="pr-4">
+              <p className="text-xs font-medium text-[#141413]">Pro Version Requirement</p>
+              <p className="text-[11px] text-[#71716D]">
+                Restricts visibility and applications strictly to candidates who have the Pro version.
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={formData.isProOnly}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, isProOnly: e.target.checked }))
+                }
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-[#E8E8E3] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#B8532F]"></div>
+            </label>
+          </div>
         </form>
       </Modal>
 

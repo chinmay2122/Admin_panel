@@ -1,0 +1,448 @@
+-- ==============================================================================
+-- DATABASE SCHEMA: PROFILES, ARTWORKS, INQUIRIES, JOBS & PRO CANDIDATE APPLICATIONS
+-- ==============================================================================
+
+-- 1. PROFILES (Users, Creators, Candidates, Admins)
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  full_name text NOT NULL,
+  email text NOT NULL,
+  phone_number text,
+  role text NOT NULL DEFAULT 'User'::text CHECK (role = ANY (ARRAY['Admin'::text, 'User'::text, 'Creator'::text])),
+  plan text NOT NULL DEFAULT 'free'::text CHECK (plan = ANY (ARRAY['free'::text, 'pro'::text, 'elite'::text])), -- Subscription Tier for Candidates / Creators
+  is_premium boolean DEFAULT false,
+  location_country text,
+  location_city text,
+  portfolio_url text,
+  about_me text,
+  profile_pic_url text,
+  social_links jsonb DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  cover_image_url text,
+  primary_medium text,
+  artist_statement text,
+  art_forms text,
+  awards text,
+  other_links text,
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
+);
+
+-- 2. ARTWORKS
+CREATE TABLE public.artworks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  creator_id uuid NOT NULL,
+  title text NOT NULL,
+  art_type text NOT NULL,
+  artist_name text NOT NULL,
+  description text,
+  external_link text,
+  image_url text NOT NULL,
+  price numeric,
+  status text NOT NULL DEFAULT 'Available'::text CHECK (status = ANY (ARRAY['Available'::text, 'For Sale'::text, 'Not for sale'::text, 'Sold'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  additional_images text[] DEFAULT '{}'::text[],
+  year text,
+  dimensions text,
+  location text,
+  style text,
+  tags text[] DEFAULT '{}'::text[],
+  collection text,
+  price_visibility text DEFAULT 'Show Price'::text CHECK (price_visibility = ANY (ARRAY['Show Price'::text, 'Price on Request'::text, 'Hide Price'::text])),
+  is_published boolean DEFAULT true,
+  CONSTRAINT artworks_pkey PRIMARY KEY (id),
+  CONSTRAINT artworks_creator_id_fkey FOREIGN KEY (creator_id) REFERENCES public.profiles(id) ON DELETE CASCADE
+);
+
+-- 3. INQUIRIES CHATS
+CREATE TABLE public.inquiries_chats (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  artwork_id uuid NOT NULL,
+  guest_id uuid NOT NULL,
+  creator_id uuid NOT NULL,
+  status text NOT NULL DEFAULT 'Active'::text CHECK (status = ANY (ARRAY['Active'::text, 'Closed'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT inquiries_chats_pkey PRIMARY KEY (id),
+  CONSTRAINT inquiries_chats_artwork_id_fkey FOREIGN KEY (artwork_id) REFERENCES public.artworks(id) ON DELETE CASCADE,
+  CONSTRAINT inquiries_chats_guest_id_fkey FOREIGN KEY (guest_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT inquiries_chats_creator_id_fkey FOREIGN KEY (creator_id) REFERENCES public.profiles(id) ON DELETE CASCADE
+);
+
+-- 4. MESSAGES
+CREATE TABLE public.messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  chat_id uuid NOT NULL,
+  sender_id uuid NOT NULL,
+  content text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT messages_pkey PRIMARY KEY (id),
+  CONSTRAINT messages_chat_id_fkey FOREIGN KEY (chat_id) REFERENCES public.inquiries_chats(id) ON DELETE CASCADE,
+  CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.profiles(id) ON DELETE CASCADE
+);
+
+-- 5. JOBS & COMMISSIONS
+CREATE TABLE public.jobs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  company text NOT NULL,
+  type text NOT NULL DEFAULT 'Full-time'::text, -- e.g. Full-time, Commission, Residency, Contract
+  location text NOT NULL,
+  description text,
+  requirements text,
+  status text NOT NULL DEFAULT 'open'::text CHECK (status = ANY (ARRAY['open'::text, 'closed'::text])),
+  is_pro_only boolean NOT NULL DEFAULT true, -- If true, visible ONLY to candidates with the Pro version!
+  created_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT jobs_pkey PRIMARY KEY (id)
+);
+
+-- 6. JOB APPLICATIONS (Pro Candidates)
+CREATE TABLE public.job_applications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  job_id uuid NOT NULL,
+  candidate_id uuid NOT NULL,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'shortlisted'::text, 'accepted'::text, 'rejected'::text])),
+  cover_letter text,
+  portfolio_url text,
+  resume_url text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT job_applications_pkey PRIMARY KEY (id),
+  CONSTRAINT job_applications_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id) ON DELETE CASCADE,
+  CONSTRAINT job_applications_candidate_id_fkey FOREIGN KEY (candidate_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT job_applications_unique_candidate UNIQUE (job_id, candidate_id)
+);
+
+-- 7. PERFORMANCE INDEXES
+CREATE INDEX IF NOT EXISTS idx_artworks_creator_id ON public.artworks(creator_id);
+CREATE INDEX IF NOT EXISTS idx_inquiries_chats_artwork ON public.inquiries_chats(artwork_id);
+CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON public.messages(chat_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON public.jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_is_pro_only ON public.jobs(is_pro_only);
+CREATE INDEX IF NOT EXISTS idx_job_applications_job_id ON public.job_applications(job_id);
+CREATE INDEX IF NOT EXISTS idx_job_applications_candidate_id ON public.job_applications(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_plan ON public.profiles(plan);
+
+-- 8. ROW LEVEL SECURITY (RLS) POLICIES
+ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.job_applications ENABLE ROW LEVEL SECURITY;
+
+-- Jobs Visibility:
+-- Pro jobs are visible ONLY to Pro candidates (and Admins). Non-pro jobs are visible to all.
+CREATE POLICY "Jobs visibility based on Pro plan"
+ON public.jobs
+FOR SELECT
+TO authenticated, anon
+USING (
+  is_pro_only = false
+  OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin'
+  OR (
+    SELECT (plan IN ('pro', 'elite') OR is_premium = true)
+    FROM public.profiles
+    WHERE id = auth.uid()
+  )
+);
+
+-- Admins manage jobs
+CREATE POLICY "Admins can manage jobs"
+ON public.jobs
+FOR ALL
+TO authenticated
+USING (
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin'
+)
+WITH CHECK (
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin'
+);
+
+-- Job Applications: Only Pro candidates can submit applications
+CREATE POLICY "Only Pro candidates can apply for jobs"
+ON public.job_applications
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  auth.uid() = candidate_id
+  AND EXISTS (
+    SELECT 1 FROM public.jobs j
+    WHERE j.id = job_id AND j.status = 'open'
+  )
+  AND (
+    SELECT (plan IN ('pro', 'elite') OR is_premium = true)
+    FROM public.profiles
+    WHERE id = auth.uid()
+  )
+);
+
+-- Candidates view their own applications, Admins view all
+CREATE POLICY "Candidates and Admins can view applications"
+ON public.job_applications
+FOR SELECT
+TO authenticated
+USING (
+  candidate_id = auth.uid()
+  OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin'
+);
+
+CREATE POLICY "Admins can update applications"
+ON public.job_applications
+FOR UPDATE
+TO authenticated
+USING (
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin'
+);
+
+-- 9. STRICT DATABASE TRIGGER: Ensure only Pro candidates can apply
+CREATE OR REPLACE FUNCTION public.check_candidate_pro_before_apply()
+RETURNS trigger AS $$
+DECLARE
+  v_plan text;
+  v_premium boolean;
+  v_is_pro_only boolean;
+BEGIN
+  SELECT is_pro_only INTO v_is_pro_only FROM public.jobs WHERE id = NEW.job_id;
+  SELECT plan, is_premium INTO v_plan, v_premium FROM public.profiles WHERE id = NEW.candidate_id;
+
+  IF (v_is_pro_only IS TRUE OR v_is_pro_only IS NULL) THEN
+    IF (v_plan NOT IN ('pro', 'elite') AND v_premium IS NOT TRUE) THEN
+      RAISE EXCEPTION 'Candidate must have an active Pro subscription to apply for this job.';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_check_candidate_pro_before_apply ON public.job_applications;
+CREATE TRIGGER trg_check_candidate_pro_before_apply
+  BEFORE INSERT ON public.job_applications
+  FOR EACH ROW
+  EXECUTE FUNCTION public.check_candidate_pro_before_apply();
+
+-- ==============================================================================
+-- 10. REPORTS & COMMUNITY MODERATION
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.reports (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  artwork_id uuid NOT NULL,
+  reporter_user_id uuid NOT NULL,
+  artwork_owner_id uuid,
+  reason text NOT NULL,
+  details text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'resolved'::text, 'dismissed'::text])),
+  moderation_action text,
+  moderation_note text,
+  resolved_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  resolved_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT reports_pkey PRIMARY KEY (id),
+  CONSTRAINT reports_artwork_id_fkey FOREIGN KEY (artwork_id) REFERENCES public.artworks(id) ON DELETE CASCADE,
+  CONSTRAINT reports_reporter_user_id_fkey FOREIGN KEY (reporter_user_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
+  CONSTRAINT reports_artwork_owner_id_fkey FOREIGN KEY (artwork_owner_id) REFERENCES public.profiles(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_reports_status ON public.reports(status);
+CREATE INDEX IF NOT EXISTS idx_reports_artwork_id ON public.reports(artwork_id);
+CREATE INDEX IF NOT EXISTS idx_reports_reporter_user_id ON public.reports(reporter_user_id);
+CREATE INDEX IF NOT EXISTS idx_reports_created_at ON public.reports(created_at DESC);
+
+-- 11. MODERATION AUDIT LOGS
+CREATE TABLE IF NOT EXISTS public.moderation_audit_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  report_id uuid REFERENCES public.reports(id) ON DELETE SET NULL,
+  artwork_id uuid REFERENCES public.artworks(id) ON DELETE SET NULL,
+  target_user_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  admin_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  action text NOT NULL,
+  note text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT moderation_audit_logs_pkey PRIMARY KEY (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_moderation_audit_report_id ON public.moderation_audit_logs(report_id);
+CREATE INDEX IF NOT EXISTS idx_moderation_audit_created_at ON public.moderation_audit_logs(created_at DESC);
+
+-- ==============================================================================
+-- 12. COMPREHENSIVE SECURITY HARDENING & RLS POLICIES (MIGRATION 004)
+-- ==============================================================================
+
+-- Profiles status column
+ALTER TABLE public.profiles 
+ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active'::text 
+CHECK (status = ANY (ARRAY['active'::text, 'suspended'::text, 'deactivated'::text]));
+
+CREATE INDEX IF NOT EXISTS idx_profiles_status ON public.profiles(status);
+
+-- Anti-privilege escalation trigger on profiles
+CREATE OR REPLACE FUNCTION public.prevent_profile_privilege_escalation()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_caller_role text;
+BEGIN
+  IF current_user IN ('postgres', 'service_role') THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT role INTO v_caller_role FROM public.profiles WHERE id = auth.uid();
+
+  IF v_caller_role IS DISTINCT FROM 'Admin' THEN
+    IF NEW.role IS DISTINCT FROM OLD.role THEN
+      RAISE EXCEPTION 'Unauthorized: Users are not permitted to modify role permissions.';
+    END IF;
+    IF NEW.plan IS DISTINCT FROM OLD.plan THEN
+      RAISE EXCEPTION 'Unauthorized: Users cannot modify subscription plans directly.';
+    END IF;
+    IF NEW.is_premium IS DISTINCT FROM OLD.is_premium THEN
+      RAISE EXCEPTION 'Unauthorized: Users cannot modify premium status directly.';
+    END IF;
+    IF NEW.status IS DISTINCT FROM OLD.status THEN
+      RAISE EXCEPTION 'Unauthorized: Users cannot modify account moderation status.';
+    END IF;
+    IF NEW.id IS DISTINCT FROM OLD.id THEN
+      RAISE EXCEPTION 'Unauthorized: Profile identifier cannot be altered.';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_prevent_profile_privilege_escalation ON public.profiles;
+CREATE TRIGGER trg_prevent_profile_privilege_escalation
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.prevent_profile_privilege_escalation();
+
+-- Artworks RLS (Hide/Draft isolation)
+ALTER TABLE public.artworks ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Artworks are viewable by everyone" ON public.artworks;
+CREATE POLICY "Artworks are viewable by everyone"
+ON public.artworks FOR SELECT
+USING (
+  (is_published = true AND status IN ('Available', 'For Sale', 'Sold'))
+  OR (auth.uid() = creator_id)
+  OR ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin')
+);
+
+-- Reports RLS
+ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can insert reports" ON public.reports;
+CREATE POLICY "Users can insert reports"
+ON public.reports FOR INSERT
+TO authenticated
+WITH CHECK (
+  auth.uid() = reporter_user_id
+  AND EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND status = 'active')
+);
+
+DROP POLICY IF EXISTS "Users can view their submitted reports" ON public.reports;
+CREATE POLICY "Users can view their submitted reports"
+ON public.reports FOR SELECT
+TO authenticated
+USING (auth.uid() = reporter_user_id);
+
+DROP POLICY IF EXISTS "Admins full access to reports" ON public.reports;
+CREATE POLICY "Admins full access to reports"
+ON public.reports FOR ALL
+TO authenticated
+USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin')
+WITH CHECK ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin');
+
+-- Moderation Audit Logs (Tamper-Resistant Append-Only)
+ALTER TABLE public.moderation_audit_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins view audit logs" ON public.moderation_audit_logs;
+CREATE POLICY "Admins view audit logs"
+ON public.moderation_audit_logs FOR SELECT
+TO authenticated
+USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin');
+
+DROP POLICY IF EXISTS "Admins insert audit logs" ON public.moderation_audit_logs;
+CREATE POLICY "Admins insert audit logs"
+ON public.moderation_audit_logs FOR INSERT
+TO authenticated
+WITH CHECK ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin');
+
+REVOKE UPDATE, DELETE, TRUNCATE ON public.moderation_audit_logs FROM authenticated, anon;
+
+-- ==============================================================================
+-- 12. PLATFORM SETTINGS & CONTROLS (STUDIO SETTINGS)
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS public.platform_settings (
+  id text PRIMARY KEY DEFAULT 'default',
+  free_artwork_limit integer NOT NULL DEFAULT 3 CHECK (free_artwork_limit >= 0 AND free_artwork_limit <= 10000),
+  lite_artwork_limit integer NOT NULL DEFAULT 50 CHECK (lite_artwork_limit >= 0 AND lite_artwork_limit <= 10000),
+  pro_artwork_limit integer NOT NULL DEFAULT 100 CHECK (pro_artwork_limit >= 0 AND pro_artwork_limit <= 10000),
+  invite_request_limit integer NOT NULL DEFAULT 20 CHECK (invite_request_limit >= 0 AND invite_request_limit <= 10000),
+  cor_enabled boolean NOT NULL DEFAULT true,
+  featured_creator_controls_enabled boolean NOT NULL DEFAULT true,
+  moderation_settings_enabled boolean NOT NULL DEFAULT true,
+  platform_announcement text NOT NULL DEFAULT 'Welcome to the iRAS Studio prototype.',
+  default_profile_visibility text NOT NULL DEFAULT 'public' CHECK (default_profile_visibility = ANY (ARRAY['public'::text, 'private'::text])),
+  updated_at timestamp with time zone DEFAULT now(),
+  updated_by text
+);
+
+INSERT INTO public.platform_settings (
+  id,
+  free_artwork_limit,
+  lite_artwork_limit,
+  pro_artwork_limit,
+  invite_request_limit,
+  cor_enabled,
+  featured_creator_controls_enabled,
+  moderation_settings_enabled,
+  platform_announcement,
+  default_profile_visibility
+) VALUES (
+  'default',
+  3,
+  50,
+  100,
+  20,
+  true,
+  true,
+  true,
+  'Welcome to the iRAS Studio prototype.',
+  'public'
+) ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS public.settings_audit_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id text NOT NULL,
+  changed_settings jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_settings_audit_created_at ON public.settings_audit_logs(created_at DESC);
+
+ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.settings_audit_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public and authenticated read platform settings" ON public.platform_settings;
+CREATE POLICY "Public and authenticated read platform settings"
+  ON public.platform_settings FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admins can update platform settings" ON public.platform_settings;
+CREATE POLICY "Admins can update platform settings"
+  ON public.platform_settings FOR UPDATE
+  USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin')
+  WITH CHECK ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin');
+
+DROP POLICY IF EXISTS "Admins view settings audit logs" ON public.settings_audit_logs;
+CREATE POLICY "Admins view settings audit logs"
+  ON public.settings_audit_logs FOR SELECT
+  USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin');
+
+DROP POLICY IF EXISTS "Admins insert settings audit logs" ON public.settings_audit_logs;
+CREATE POLICY "Admins insert settings audit logs"
+  ON public.settings_audit_logs FOR INSERT
+  WITH CHECK ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin');
+
+REVOKE UPDATE, DELETE, TRUNCATE ON public.settings_audit_logs FROM authenticated, anon;

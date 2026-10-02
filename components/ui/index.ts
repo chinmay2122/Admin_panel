@@ -12,3 +12,4 @@ export * from "./Drawer";
 export * from "./Pagination";
 export * from "./FilterBar";
 export * from "./Toast";
+export * from "./icons";

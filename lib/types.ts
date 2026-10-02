@@ -47,6 +47,13 @@ export interface Artwork {
   imageUrl: string;
   status: ArtworkStatus;
   createdAt: string;
+  year?: string;
+  location?: string;
+  collection?: string;
+  description?: string;
+  isFeatured?: boolean;
+  isFlagged?: boolean;
+  availability?: string;
 }
 
 export type CorMemberStatus = "active" | "expired";
@@ -67,7 +74,10 @@ export interface Job {
   company: string;
   type: string;
   location: string;
+  description?: string;
+  requirements?: string;
   status: JobStatus;
+  isProOnly?: boolean;
   createdAt: string;
   applicantCount?: number;
 }
@@ -80,7 +90,13 @@ export interface Application {
   jobTitle: string;
   creatorId: string;
   creatorName: string;
+  candidateId?: string;
+  candidateName?: string;
+  candidatePlan?: UserPlan;
   status: ApplicationStatus;
+  coverLetter?: string;
+  portfolioUrl?: string;
+  resumeUrl?: string;
   appliedAt: string;
 }
 
@@ -119,6 +135,7 @@ export interface JobFilters {
   query?: string;
   status?: JobStatus;
   type?: string;
+  isProOnly?: boolean;
 }
 
 export interface ApplicationFilters {
@@ -126,4 +143,83 @@ export interface ApplicationFilters {
   jobId?: string;
   creatorId?: string;
   status?: ApplicationStatus;
+}
+
+export type ReportStatus = "pending" | "resolved" | "dismissed";
+
+export type ReportReason =
+  | "Inappropriate content"
+  | "Copyright infringement"
+  | "Possible copyright infringement"
+  | "Incorrect artwork information"
+  | "Harassment or offensive content"
+  | "Spam or misleading content"
+  | "Fraud or scam"
+  | "Stolen artwork"
+  | "Other";
+
+export interface Report {
+  id: string;
+  artworkId: string;
+  reporterUserId: string;
+  artworkOwnerId?: string;
+  reason: string;
+  details?: string;
+  status: ReportStatus;
+  createdAt: string;
+  updatedAt?: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  moderationAction?: string;
+  moderationNote?: string;
+
+  // Joined / resolved presentation fields
+  artworkTitle?: string;
+  artworkImageUrl?: string;
+  artworkMedium?: string;
+  artworkDimensions?: string;
+  artworkStatus?: ArtworkStatus;
+  artworkPrice?: number;
+  ownerName?: string;
+  ownerEmail?: string;
+  reporterName?: string;
+  reporterEmail?: string;
+}
+
+export interface ReportFilters {
+  query?: string;
+  status?: ReportStatus | "all";
+}
+
+export interface ModerationAuditLog {
+  id: string;
+  reportId?: string;
+  artworkId?: string;
+  targetUserId?: string;
+  adminId?: string;
+  action: "report_created" | "report_dismissed" | "report_resolved" | "artwork_hidden" | "artwork_removed" | "user_suspended";
+  note?: string;
+  createdAt: string;
+}
+
+export interface PlatformSettings {
+  id: string;
+  freeArtworkLimit: number;
+  liteArtworkLimit: number;
+  proArtworkLimit: number;
+  inviteRequestLimit: number;
+  corEnabled: boolean;
+  featuredCreatorControlsEnabled: boolean;
+  moderationSettingsEnabled: boolean;
+  platformAnnouncement: string;
+  defaultProfileVisibility: "public" | "private";
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface SettingsAuditLog {
+  id: string;
+  adminId: string;
+  changedSettings: Record<string, { previous: any; current: any }>;
+  createdAt: string;
 }

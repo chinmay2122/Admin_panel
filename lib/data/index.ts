@@ -4,4 +4,8 @@ export * from "./artworks";
 export * from "./cor";
 export * from "./jobs";
 export * from "./applications";
+export * from "./inquiries";
+export * from "./reports";
+export * from "./subscriptions";
+export * from "./settings";
 export * from "./seed";

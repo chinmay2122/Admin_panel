@@ -60,7 +60,7 @@ export default function LoginPage() {
         {/* Top Wordmark */}
         <div className="text-center space-y-1.5">
           <h1 className="text-2xl font-medium tracking-tight text-[#141413]">
-            iRASStudio<span className="text-sm align-super font-normal text-[#6E6E69]">®</span>
+            ErasStudio<span className="text-sm align-super font-normal text-[#6E6E69]">®</span>
           </h1>
           <p className="text-xs uppercase tracking-wider text-[#6E6E69]">
             Admin Console
@@ -128,7 +128,7 @@ export default function LoginPage() {
 
         <div className="text-center text-xs text-[#8A8A85]">
           <span>Protected curatorial platform • </span>
-          <span className="text-[#6E6E69]">iRAS Studio</span>
+          <span className="text-[#6E6E69]">ErasStudio</span>
         </div>
       </div>
     </div>
