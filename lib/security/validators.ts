@@ -288,3 +288,42 @@ export function validatePlatformSettings(data: unknown): {
     sanitized: Object.keys(errors).length === 0 ? sanitized : undefined,
   };
 }
+
+// ==============================================================================
+// COR Workflow Validators
+// ==============================================================================
+
+export const COR_REQUEST_STATUSES = ["pending", "approved", "declined"] as const;
+export const COR_MEMBER_STATUSES = ["active", "paused", "completed", "removed", "expired"] as const;
+export const COR_OPPORTUNITY_STATUSES = ["open", "paused", "closed"] as const;
+export const COR_OPPORTUNITY_WORKPLACE_TYPES = ["Remote", "Hybrid", "Onsite"] as const;
+export const COR_APPLICATION_STATUSES = [
+  "Recommended",
+  "Preparing Application",
+  "Applied",
+  "Screening",
+  "Interview",
+  "Final Round",
+  "Offer",
+  "Rejected",
+] as const;
+
+export function isValidCorRequestStatus(status: unknown): status is (typeof COR_REQUEST_STATUSES)[number] {
+  return typeof status === "string" && COR_REQUEST_STATUSES.includes(status as any);
+}
+
+export function isValidCorMemberStatus(status: unknown): status is (typeof COR_MEMBER_STATUSES)[number] {
+  return typeof status === "string" && COR_MEMBER_STATUSES.includes(status as any);
+}
+
+export function isValidCorOpportunityStatus(status: unknown): status is (typeof COR_OPPORTUNITY_STATUSES)[number] {
+  return typeof status === "string" && COR_OPPORTUNITY_STATUSES.includes(status as any);
+}
+
+export function isValidCorOpportunityWorkplace(type: unknown): type is (typeof COR_OPPORTUNITY_WORKPLACE_TYPES)[number] {
+  return typeof type === "string" && COR_OPPORTUNITY_WORKPLACE_TYPES.includes(type as any);
+}
+
+export function isValidCorApplicationStatus(status: unknown): status is (typeof COR_APPLICATION_STATUSES)[number] {
+  return typeof status === "string" && COR_APPLICATION_STATUSES.includes(status as any);
+}

@@ -60,7 +60,7 @@ function formatDate(dateStr: string): string {
   }
 }
 
-export function ReportsClient({ initialReports, stats }: ReportsClientProps) {
+export function ReportsClient({ initialReports }: ReportsClientProps) {
   const toast = useToast();
   const [reports, setReports] = useState<Report[]>(initialReports);
   const [activeTab, setActiveTab] = useState<ReportStatus | "all">("all");

@@ -1,4 +1,4 @@
-import { getSupabaseAdmin } from "../supabase/server";
+import { getSupabaseAdmin, isSupabaseConfigured } from "../supabase/server";
 
 export interface InquiryChat {
   id: string;
@@ -24,46 +24,12 @@ export interface InquiryMessage {
   createdAt: string;
 }
 
-// In-memory fallback if Supabase is not connected
-let mockChats: InquiryChat[] = [
-  {
-    id: "chat_01",
-    artworkId: "art_01",
-    artworkTitle: "Resonance in Ochre IV",
-    artworkImage: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
-    guestId: "usr_04",
-    guestName: "Elena Rostova",
-    guestEmail: "elena@rostova.gallery",
-    creatorId: "crt_01",
-    creatorName: "Sora Takahashi",
-    status: "Active",
-    createdAt: new Date().toISOString(),
-    lastMessage: "Is this piece available for international shipping?",
-  },
-];
-
-let mockMessages: InquiryMessage[] = [
-  {
-    id: "msg_01",
-    chatId: "chat_01",
-    senderId: "usr_04",
-    senderName: "Elena Rostova",
-    content: "Hello Sora, is this piece available for international shipping?",
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-  },
-  {
-    id: "msg_02",
-    chatId: "chat_01",
-    senderId: "crt_01",
-    senderName: "Sora Takahashi",
-    content: "Yes Elena, we can crate and insure it for gallery delivery worldwide.",
-    createdAt: new Date().toISOString(),
-  },
-];
+let mockChats: InquiryChat[] = [];
+let mockMessages: InquiryMessage[] = [];
 
 export const inquiriesRepo = {
   /**
-   * List all inquiry chats
+   * List all inquiry chats directly from live database
    */
   async listChats(status?: "Active" | "Closed"): Promise<InquiryChat[]> {
     const supabase = getSupabaseAdmin();
@@ -89,7 +55,7 @@ export const inquiriesRepo = {
         }
 
         const { data, error } = await query;
-        if (!error && data && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           return data.map((d: any) => ({
             id: d.id,
             artworkId: d.artwork_id,
@@ -103,10 +69,16 @@ export const inquiriesRepo = {
             status: d.status,
             createdAt: d.created_at,
           }));
+        } else if (error) {
+          console.error("Supabase inquiries_chats error:", error);
         }
       } catch (err) {
-        console.warn("Supabase chats query failed, using mock data:", err);
+        console.error("Supabase chats query failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return [];
     }
 
     if (status) {
@@ -135,7 +107,7 @@ export const inquiriesRepo = {
           .eq("chat_id", chatId)
           .order("created_at", { ascending: true });
 
-        if (!error && data) {
+        if (!error && Array.isArray(data)) {
           return data.map((m: any) => ({
             id: m.id,
             chatId: m.chat_id,
@@ -144,10 +116,16 @@ export const inquiriesRepo = {
             content: m.content,
             createdAt: m.created_at,
           }));
+        } else if (error) {
+          console.error("Supabase messages query error:", error);
         }
       } catch (err) {
-        console.warn("Supabase messages query failed, using mock data:", err);
+        console.error("Supabase messages query failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return [];
     }
 
     return mockMessages.filter((m) => m.chatId === chatId);
@@ -180,8 +158,12 @@ export const inquiriesRepo = {
           };
         }
       } catch (err) {
-        console.warn("Supabase send message failed, using mock:", err);
+        console.error("Supabase send message failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return null;
     }
 
     const newMsg: InquiryMessage = {
@@ -207,8 +189,12 @@ export const inquiriesRepo = {
           .eq("id", chatId);
         if (!error) return true;
       } catch (err) {
-        console.warn("Supabase update chat status failed:", err);
+        console.error("Supabase update chat status failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return false;
     }
 
     const chat = mockChats.find((c) => c.id === chatId);

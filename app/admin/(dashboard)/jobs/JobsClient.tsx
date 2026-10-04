@@ -298,6 +298,30 @@ export function JobsClient({ initialJobs }: JobsClientProps) {
         </Button>
       </div>
 
+      {/* COR Opportunities Cross-link Banner */}
+      <div className="p-3.5 rounded-lg border border-[#EACEC3] bg-[#FAF5F2] flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 rounded-md bg-[#F0DFD7] text-[#B8532F]">
+            <Briefcase className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-[#141413]">
+              COR Talent Representation Opportunities
+            </div>
+            <div className="text-[11px] text-[#71716D]">
+              Looking to match represented COR creators or apply on their behalf? View the dedicated representation opportunities board.
+            </div>
+          </div>
+        </div>
+        <Link
+          href="/admin/cor/opportunities"
+          className="shrink-0 text-xs font-medium text-[#B8532F] hover:text-[#9E4323] hover:underline inline-flex items-center gap-1"
+        >
+          <span>Go to COR Opportunities</span>
+          <span>&rarr;</span>
+        </Link>
+      </div>
+
       {/* FilterBar */}
       <FilterBar
         searchQuery={searchQuery}

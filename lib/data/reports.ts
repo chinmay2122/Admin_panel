@@ -1,8 +1,7 @@
 import { Report, ReportFilters, ReportStatus, ModerationAuditLog } from "../types";
-import { seedReports } from "./seed";
-import { getSupabaseAdmin } from "../supabase/server";
+import { getSupabaseAdmin, isSupabaseConfigured } from "../supabase/server";
 
-let reportsStore: Report[] = [...seedReports];
+let reportsStore: Report[] = [];
 let auditLogsStore: ModerationAuditLog[] = [];
 
 function mapReportFromSupabase(row: any): Report {
@@ -59,7 +58,7 @@ export const reportsRepo = {
 
         const { data, error } = await query.order("created_at", { ascending: false });
 
-        if (!error && data && data.length > 0) {
+        if (!error && Array.isArray(data)) {
           let list = data.map(mapReportFromSupabase);
 
           if (filters?.query) {
@@ -74,10 +73,16 @@ export const reportsRepo = {
           }
 
           return list;
+        } else if (error) {
+          console.error("Supabase reports query error:", error);
         }
       } catch (err) {
-        console.warn("Supabase reports query failed, falling back to local dataset:", err);
+        console.error("Supabase reports query failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return [];
     }
 
     // In-memory fallback
@@ -135,6 +140,10 @@ export const reportsRepo = {
       } catch (err) {
         console.warn("Supabase getById report failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return null;
     }
 
     const found = reportsStore.find((r) => r.id === id);

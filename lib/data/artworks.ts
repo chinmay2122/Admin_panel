@@ -1,8 +1,7 @@
 import { Artwork, ArtworkFilters, ArtworkStatus } from "../types";
-import { seedArtworks } from "./seed";
-import { getSupabaseAdmin } from "../supabase/server";
+import { getSupabaseAdmin, isSupabaseConfigured } from "../supabase/server";
 
-let artworksStore: Artwork[] = [...seedArtworks];
+let artworksStore: Artwork[] = [];
 
 function toSupabaseStatus(status?: string): "Available" | "For Sale" | "Not for sale" | "Sold" {
   if (!status) return "Available";
@@ -97,6 +96,10 @@ export const artworksRepo = {
       }
     }
 
+    if (isSupabaseConfigured()) {
+      return [];
+    }
+
     // Fallback to in-memory store
     let result = [...artworksStore];
 
@@ -158,6 +161,10 @@ export const artworksRepo = {
       } catch (err) {
         console.warn("Supabase getById failed, using fallback:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return null;
     }
 
     const artwork = artworksStore.find((a) => a.id === id);

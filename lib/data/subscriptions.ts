@@ -24,11 +24,10 @@ export async function getSubscriptionStats(): Promise<SubscriptionStats> {
   const rawLiteCount = users.filter((u) => (u.plan as string) === "lite").length;
   const rawFreeCount = users.filter((u) => !u.plan || u.plan === "free").length;
 
-  // Use raw counts if available, otherwise fallback to seed distribution
-  const proCount = rawProCount > 0 ? rawProCount : 7;
-  const eliteCount = rawEliteCount > 0 ? rawEliteCount : 0;
-  const liteCount = rawLiteCount > 0 ? rawLiteCount : 0;
-  const freeCount = rawFreeCount > 0 ? rawFreeCount : 1;
+  const proCount = rawProCount;
+  const eliteCount = rawEliteCount;
+  const liteCount = rawLiteCount;
+  const freeCount = rawFreeCount;
   const totalPaidSubscribers = proCount + eliteCount;
   const totalUsers = totalPaidSubscribers + freeCount + liteCount;
 
@@ -43,18 +42,18 @@ export async function getSubscriptionStats(): Promise<SubscriptionStats> {
     if (u.plan === "pro" || u.plan === "elite") {
       const signupTime = new Date(u.createdAt).getTime();
       const monthsActive = isNaN(signupTime)
-        ? 6
+        ? 1
         : Math.max(1, Math.min(24, Math.floor((now - signupTime) / (1000 * 60 * 60 * 24 * 30.5))));
       const monthlyRate = u.plan === "elite" ? 99 : 29;
       calculatedLifetimeRevenue += monthsActive * monthlyRate;
     }
   });
 
-  const totalAmountGenerated = Math.max(14850, calculatedLifetimeRevenue);
+  const totalAmountGenerated = calculatedLifetimeRevenue;
 
-  const conversionRate = Math.round((totalPaidSubscribers / (totalUsers || 1)) * 100);
-  const proPercentage = Math.round((proCount / (totalPaidSubscribers || 1)) * 100);
-  const elitePercentage = Math.round((eliteCount / (totalPaidSubscribers || 1)) * 100);
+  const conversionRate = totalUsers > 0 ? Math.round((totalPaidSubscribers / totalUsers) * 100) : 0;
+  const proPercentage = totalPaidSubscribers > 0 ? Math.round((proCount / totalPaidSubscribers) * 100) : 0;
+  const elitePercentage = totalPaidSubscribers > 0 ? Math.round((eliteCount / totalPaidSubscribers) * 100) : 0;
 
   return {
     freeCount,

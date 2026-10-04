@@ -117,7 +117,7 @@ npm install
 
 ### Step 3: Start the Development Server
 ```bash
-npm run dev
+q
 ```
 *(On Windows PowerShell, if `npm.ps1 cannot be loaded` appears, run `npm.cmd run dev`)*
 

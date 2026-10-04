@@ -1,8 +1,7 @@
 import { Application, ApplicationFilters } from "../types";
-import { seedApplications } from "./seed";
-import { getSupabaseAdmin } from "../supabase/server";
+import { getSupabaseAdmin, isSupabaseConfigured } from "../supabase/server";
 
-let applicationsStore: Application[] = [...seedApplications];
+let applicationsStore: Application[] = [];
 
 function mapAppFromSupabase(row: any): Application {
   return {
@@ -51,7 +50,7 @@ export const applicationsRepo = {
 
         const { data, error } = await query.order("created_at", { ascending: false });
 
-        if (!error && data) {
+        if (!error && Array.isArray(data)) {
           let list = data.map(mapAppFromSupabase);
 
           if (filters?.query) {
@@ -64,10 +63,16 @@ export const applicationsRepo = {
           }
 
           return list;
+        } else if (error) {
+          console.error("Supabase job_applications query error:", error);
         }
       } catch (err) {
-        console.warn("Supabase job_applications query failed, using fallback:", err);
+        console.error("Supabase job_applications query failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return [];
     }
 
     let result = [...applicationsStore];
@@ -120,6 +125,10 @@ export const applicationsRepo = {
       } catch (err) {
         console.warn("Supabase application getById failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return null;
     }
 
     const app = applicationsStore.find((a) => a.id === id);

@@ -4,20 +4,23 @@ import {
   corMembersRepo,
   corOpportunitiesRepo,
   corRequestsRepo,
+  safeAsync,
 } from "@/lib/data";
-import { CorApplicationsClient } from "../cor/applications/CorApplicationsClient";
+import { CorApplicationsClient } from "./CorApplicationsClient";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Application Tracker | COR Admin Console",
   description: "Keep every candidate and opportunity moving together across the representation pipeline.",
 };
 
-export default async function ApplicationsPage() {
+export default async function CorApplicationsPage() {
   const [applications, members, opportunities, requests] = await Promise.all([
-    corApplicationsRepo.list(),
-    corMembersRepo.list({ status: "active" }),
-    corOpportunitiesRepo.list({ status: "open" }),
-    corRequestsRepo.list(),
+    safeAsync(corApplicationsRepo.list(), []),
+    safeAsync(corMembersRepo.list({ status: "active" }), []),
+    safeAsync(corOpportunitiesRepo.list({ status: "open" }), []),
+    safeAsync(corRequestsRepo.list(), []),
   ]);
 
   const counts = {

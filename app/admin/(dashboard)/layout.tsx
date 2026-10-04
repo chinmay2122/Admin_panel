@@ -45,6 +45,13 @@ const navItems: NavItem[] = [
   { name: "Studio Settings", href: "/admin/settings", icon: Sliders },
 ];
 
+const corSubNav = [
+  { name: "Requests", href: "/admin/cor/requests" },
+  { name: "Members", href: "/admin/cor/members" },
+  { name: "Applications", href: "/admin/cor/applications" },
+  { name: "Opportunities", href: "/admin/cor/opportunities" },
+];
+
 function getPageTitle(pathname: string): string {
   if (pathname.includes("/admin/overview")) return "Overview";
   if (pathname.includes("/admin/users")) return "Users";
@@ -52,7 +59,11 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes("/admin/creators")) return "Creators";
   if (pathname.includes("/admin/artworks")) return "Artworks";
   if (pathname.includes("/admin/reports")) return "Reports & moderation";
-  if (pathname.includes("/admin/cor")) return "COR";
+  if (pathname.includes("/admin/cor/requests")) return "COR Requests";
+  if (pathname.includes("/admin/cor/members")) return "COR Members";
+  if (pathname.includes("/admin/cor/applications")) return "COR Applications";
+  if (pathname.includes("/admin/cor/opportunities")) return "COR Opportunities";
+  if (pathname.includes("/admin/cor")) return "Career Operations & Representation (COR)";
   if (pathname.includes("/admin/jobs")) return "Jobs";
   if (pathname.includes("/admin/applications")) return "Applications";
   if (pathname.includes("/admin/settings")) return "Studio settings";
@@ -154,37 +165,63 @@ export default function DashboardLayout({
           />
 
           <div className="relative bg-[#FAFAF8] border-b border-[#E8E8E3] px-4 py-6 shadow-sm space-y-6 animate-in slide-in-from-top-2 duration-200">
-            <nav className="space-y-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
+                const isCor = item.href === "/admin/cor";
+                const isCorActive = isCor && (pathname === "/admin/cor" || pathname.startsWith("/admin/cor/"));
                 const isActive =
-                  pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  pathname === item.href ||
+                  (!isCor && pathname.startsWith(`${item.href}/`)) ||
+                  (isCor && pathname === "/admin/cor");
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={closeMobileDrawer}
-                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm transition-colors ${
-                      isActive
-                        ? "bg-white text-[#141413] border border-[#E8E8E3] font-medium"
-                        : "text-[#5F5F5A] hover:text-[#141413] hover:bg-white/60"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon
-                        className={`w-4 h-4 stroke-[1.75] ${
-                          isActive ? "text-[#B8532F]" : "text-[#7A7A75]"
-                        }`}
-                      />
-                      <span>{item.name}</span>
-                    </div>
-                    {isActive && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#B8532F]" />
+                  <div key={item.href} className="space-y-0.5">
+                    <Link
+                      href={item.href}
+                      onClick={closeMobileDrawer}
+                      className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm transition-colors ${
+                        isActive || (isCor && isCorActive)
+                          ? "bg-white text-[#141413] border border-[#E8E8E3] font-medium"
+                          : "text-[#5F5F5A] hover:text-[#141413] hover:bg-white/60"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon
+                          className={`w-4 h-4 stroke-[1.75] ${
+                            isActive || (isCor && isCorActive) ? "text-[#B8532F]" : "text-[#7A7A75]"
+                          }`}
+                        />
+                        <span>{item.name}</span>
+                      </div>
+                      {(isActive || (isCor && isCorActive)) && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#B8532F]" />
+                      )}
+                    </Link>
+
+                    {isCor && isCorActive && (
+                      <div className="pl-6 py-1 space-y-0.5 border-l-2 border-[#E8E8E3] ml-4 my-1">
+                        {corSubNav.map((sub) => {
+                          const isSubActive =
+                            pathname === sub.href || pathname.startsWith(`${sub.href}/`);
+                          return (
+                            <Link
+                              key={sub.href}
+                              href={sub.href}
+                              onClick={closeMobileDrawer}
+                              className={`block px-3 py-1.5 rounded-md text-xs transition-colors ${
+                                isSubActive
+                                  ? "text-[#B8532F] font-semibold bg-[#FBF0EA]"
+                                  : "text-[#71716D] hover:text-[#141413]"
+                              }`}
+                            >
+                              {sub.name}
+                            </Link>
+                          );
+                        })}
+                      </div>
                     )}
-                  </Link>
+                  </div>
                 );
               })}
-            </nav>
 
             <div className="pt-4 border-t border-[#E8E8E3] flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -239,32 +276,60 @@ export default function DashboardLayout({
           <nav className="space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
+              const isCor = item.href === "/admin/cor";
+              const isCorActive = isCor && (pathname === "/admin/cor" || pathname.startsWith("/admin/cor/"));
               const isActive =
-                pathname === item.href || pathname.startsWith(`${item.href}/`);
+                pathname === item.href ||
+                (!isCor && pathname.startsWith(`${item.href}/`)) ||
+                (isCor && pathname === "/admin/cor");
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`group flex items-center justify-between px-3 py-2.5 rounded-lg text-xs md:text-sm transition-all duration-150 ${
-                    isActive
-                      ? "bg-white text-[#141413] font-medium border border-[#E8E8E3]"
-                      : "text-[#5E5E59] hover:text-[#141413] hover:bg-[#F3F3EE]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Icon
-                      className={`w-4 h-4 stroke-[1.75] transition-colors ${
-                        isActive
-                          ? "text-[#B8532F]"
-                          : "text-[#7A7A75] group-hover:text-[#141413]"
-                      }`}
-                    />
-                    <span>{item.name}</span>
-                  </div>
-                  {isActive && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#B8532F]" />
+                <div key={item.href} className="space-y-0.5">
+                  <Link
+                    href={item.href}
+                    className={`group flex items-center justify-between px-3 py-2.5 rounded-lg text-xs md:text-sm transition-all duration-150 ${
+                      isActive || (isCor && isCorActive)
+                        ? "bg-white text-[#141413] font-medium border border-[#E8E8E3]"
+                        : "text-[#5E5E59] hover:text-[#141413] hover:bg-[#F3F3EE]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Icon
+                        className={`w-4 h-4 stroke-[1.75] transition-colors ${
+                          isActive || (isCor && isCorActive)
+                            ? "text-[#B8532F]"
+                            : "text-[#7A7A75] group-hover:text-[#141413]"
+                        }`}
+                      />
+                      <span>{item.name}</span>
+                    </div>
+                    {(isActive || (isCor && isCorActive)) && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#B8532F]" />
+                    )}
+                  </Link>
+
+                  {/* Render COR sub-nav when in COR section */}
+                  {isCor && isCorActive && (
+                    <div className="pl-5 pr-2 py-1 space-y-0.5 border-l-2 border-[#E8E8E3] ml-4 my-1">
+                      {corSubNav.map((sub) => {
+                        const isSubActive =
+                          pathname === sub.href || pathname.startsWith(`${sub.href}/`);
+                        return (
+                          <Link
+                            key={sub.href}
+                            href={sub.href}
+                            className={`block px-2.5 py-1.5 rounded-md text-xs transition-colors ${
+                              isSubActive
+                                ? "text-[#B8532F] font-semibold bg-[#FBF0EA]"
+                                : "text-[#71716D] hover:text-[#141413] hover:bg-[#F3F3EE]"
+                            }`}
+                          >
+                            {sub.name}
+                          </Link>
+                        );
+                      })}
+                    </div>
                   )}
-                </Link>
+                </div>
               );
             })}
           </nav>

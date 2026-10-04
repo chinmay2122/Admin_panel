@@ -1,12 +1,7 @@
 import { Job, JobFilters } from "../types";
-import { seedJobs, seedApplications } from "./seed";
-import { getSupabaseAdmin } from "../supabase/server";
+import { getSupabaseAdmin, isSupabaseConfigured } from "../supabase/server";
 
-let jobsStore: Job[] = seedJobs.map((j) => ({
-  ...j,
-  isProOnly: true,
-  applicantCount: seedApplications.filter((a) => a.jobId === j.id).length,
-}));
+let jobsStore: Job[] = [];
 
 function mapJobFromSupabase(row: any, applicantCount = 0): Job {
   return {
@@ -76,6 +71,10 @@ export const jobsRepo = {
       }
     }
 
+    if (isSupabaseConfigured()) {
+      return [];
+    }
+
     let result = [...jobsStore];
 
     if (!filters) return result;
@@ -124,6 +123,10 @@ export const jobsRepo = {
       } catch (err) {
         console.warn("Supabase job getById failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return null;
     }
 
     const job = jobsStore.find((j) => j.id === id);

@@ -6,18 +6,45 @@ import {
   creatorsRepo,
   artworksRepo,
   corRepo,
+  corRequestsRepo,
+  corMembersRepo,
+  corOpportunitiesRepo,
+  corApplicationsRepo,
+  corEventsRepo,
+  corNotesRepo,
+  corActivityRepo,
   jobsRepo,
   applicationsRepo,
   reportsRepo,
   settingsRepo,
 } from "@/lib/data";
-import { User, Creator, Artwork, CorMember, Job, Application, Report, PlatformSettings } from "@/lib/types";
+import {
+  User,
+  Creator,
+  Artwork,
+  CorMember,
+  CorMemberStatus,
+  CorRequest,
+  CorOpportunity,
+  CorApplication,
+  CorApplicationStatus,
+  CorAdminNote,
+  CorActivity,
+  Job,
+  Application,
+  Report,
+  PlatformSettings,
+} from "@/lib/types";
 import { canModerateTarget, hasPermission } from "@/lib/security/rbac";
 import { globalRateLimiter, RATE_LIMIT_CONFIGS } from "@/lib/security/rateLimit";
 import {
   isValidId,
   isValidReportReason,
   isValidReportStateTransition,
+  isValidCorRequestStatus,
+  isValidCorMemberStatus,
+  isValidCorOpportunityStatus,
+  isValidCorApplicationStatus,
   filterSafeArtworkUpdates,
   filterSafeUserUpdates,
   filterSafeCreatorUpdates,
@@ -959,3 +986,475 @@ export async function updateSettingsAction(
     return { success: false, error: sanitizeClientError(err, "Failed to save settings.") };
   }
 }
+
+// ==============================================================================
+// COR (Career Operations Representation) Workflow Actions
+// ==============================================================================
+
+/**
+ * Approve COR Request:
+ * 1. Validates request
+ * 2. Changes request status to 'approved'
+ * 3. Enrolls creator into cor_members as 'active'
+ * 4. Stores approved_by and approved_at
+ * 5. Logs audit activity
+ */
+export async function approveCorRequestAction(
+  requestId: string
+): Promise<{ success: boolean; request?: CorRequest; member?: CorMember; error?: string }> {
+  try {
+    const session = await requireAdminSession("cor:approve_request");
+
+    if (!isValidId(requestId)) {
+      return { success: false, error: "Invalid request ID format." };
+    }
+
+    const targetRequest = await corRequestsRepo.getById(requestId);
+    if (!targetRequest) {
+      return { success: false, error: "COR request not found." };
+    }
+
+    if (targetRequest.status === "approved") {
+      return { success: false, error: "This request has already been approved." };
+    }
+
+    // Approve the request
+    const approvedRequest = await corRequestsRepo.approve(requestId, session.id);
+    if (!approvedRequest) {
+      return { success: false, error: "Failed to update request status." };
+    }
+
+    // Check if member record already exists, or create new one
+    let member = await corMembersRepo.getByCreatorId(approvedRequest.creatorId);
+    if (member) {
+      member = await corMembersRepo.update(member.id, {
+        status: "active",
+        requestId,
+        desiredRole: approvedRequest.desiredRole,
+        skills: approvedRequest.skills,
+        experienceYears: approvedRequest.experienceYears,
+        preferredWorkType: approvedRequest.careerGoals?.preferredWorkType || "Hybrid",
+      });
+    } else {
+      member = await corMembersRepo.create({
+        creatorId: approvedRequest.creatorId,
+        name: approvedRequest.creatorName,
+        creatorName: approvedRequest.creatorName,
+        creatorEmail: approvedRequest.creatorEmail,
+        creatorAvatar: approvedRequest.creatorAvatar,
+        location: approvedRequest.location,
+        desiredRole: approvedRequest.desiredRole,
+        skills: approvedRequest.skills,
+        experienceYears: approvedRequest.experienceYears,
+        preferredWorkType: approvedRequest.careerGoals?.preferredWorkType || "Hybrid",
+        status: "active",
+        requestId,
+        approvedBy: session.id,
+        approvedAt: new Date().toISOString(),
+      });
+    }
+
+    // Update user profile isCorMember flag
+    await usersRepo.update(approvedRequest.creatorId, { isCorMember: true }).catch(() => {});
+
+    // Log Activity
+    await corActivityRepo.log({
+      creatorId: approvedRequest.creatorId,
+      corMemberId: member?.id,
+      actionType: "request_approved",
+      description: `COR application approved for ${approvedRequest.creatorName}. Member enrolled as active.`,
+      actorId: session.id,
+      actorName: session.name || "Admin",
+    });
+
+    return { success: true, request: approvedRequest, member: member || undefined };
+  } catch (err: any) {
+    console.error("approveCorRequestAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to approve COR request.") };
+  }
+}
+
+/**
+ * Decline COR Request:
+ * 1. Changes status to 'declined'
+ * 2. Stores reason & optional admin note
+ * 3. Logs activity
+ */
+export async function declineCorRequestAction(
+  requestId: string,
+  reason: string,
+  note?: string
+): Promise<{ success: boolean; request?: CorRequest; error?: string }> {
+  try {
+    const session = await requireAdminSession("cor:decline_request");
+
+    if (!isValidId(requestId)) {
+      return { success: false, error: "Invalid request ID format." };
+    }
+
+    if (!reason || !reason.trim()) {
+      return { success: false, error: "A valid decline reason is required." };
+    }
+
+    const cleanReason = reason.trim().slice(0, 500);
+    const cleanNote = note?.trim().slice(0, 1000);
+
+    const declinedRequest = await corRequestsRepo.decline(requestId, session.id, cleanReason, cleanNote);
+    if (!declinedRequest) {
+      return { success: false, error: "Failed to decline COR request." };
+    }
+
+    // Log Activity
+    await corActivityRepo.log({
+      creatorId: declinedRequest.creatorId,
+      actionType: "request_declined",
+      description: `COR request for ${declinedRequest.creatorName} declined. Reason: ${cleanReason}`,
+      actorId: session.id,
+      actorName: session.name || "Admin",
+    });
+
+    return { success: true, request: declinedRequest };
+  } catch (err: any) {
+    console.error("declineCorRequestAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to decline COR request.") };
+  }
+}
+
+/**
+ * Update COR Member Status (active, paused, completed, removed, expired)
+ */
+export async function updateCorMemberStatusAction(
+  memberId: string,
+  status: CorMemberStatus
+): Promise<{ success: boolean; member?: CorMember; error?: string }> {
+  try {
+    const session = await requireAdminSession("cor:manage");
+
+    if (!isValidId(memberId)) {
+      return { success: false, error: "Invalid member ID format." };
+    }
+
+    if (!isValidCorMemberStatus(status)) {
+      return { success: false, error: "Invalid COR member status." };
+    }
+
+    const updated = await corMembersRepo.update(memberId, { status });
+    if (!updated) {
+      return { success: false, error: "Member not found." };
+    }
+
+    await corActivityRepo.log({
+      creatorId: updated.creatorId,
+      corMemberId: updated.id,
+      actionType: "member_status_changed",
+      description: `Membership status for ${updated.name} updated to '${status}'.`,
+      actorId: session.id,
+      actorName: session.name || "Admin",
+    });
+
+    return { success: true, member: updated };
+  } catch (err: any) {
+    console.error("updateCorMemberStatusAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to update member status.") };
+  }
+}
+
+/**
+ * Update COR Member Internal Notes & Career Strategy (Admin Only)
+ */
+export async function updateCorMemberNotesAction(
+  memberId: string,
+  internalNotes?: string,
+  careerStrategy?: string
+): Promise<{ success: boolean; member?: CorMember; error?: string }> {
+  try {
+    await requireAdminSession("cor:manage");
+
+    if (!isValidId(memberId)) {
+      return { success: false, error: "Invalid member ID format." };
+    }
+
+    const updated = await corMembersRepo.update(memberId, {
+      internalNotes: internalNotes !== undefined ? internalNotes.trim().slice(0, 3000) : undefined,
+      careerStrategy: careerStrategy !== undefined ? careerStrategy.trim().slice(0, 3000) : undefined,
+    });
+
+    if (!updated) {
+      return { success: false, error: "Member not found." };
+    }
+
+    return { success: true, member: updated };
+  } catch (err: any) {
+    console.error("updateCorMemberNotesAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to save member notes.") };
+  }
+}
+
+/**
+ * Create COR Opportunity (Job/Residency/Commission)
+ */
+export async function createCorOpportunityAction(
+  data: Omit<CorOpportunity, "id" | "createdAt" | "updatedAt">
+): Promise<{ success: boolean; opportunity?: CorOpportunity; error?: string }> {
+  try {
+    const session = await requireAdminSession("cor:manage_opportunities");
+
+    if (!data.title?.trim() || !data.company?.trim() || !data.location?.trim()) {
+      return { success: false, error: "Title, Company, and Location are mandatory fields." };
+    }
+
+    const opportunity = await corOpportunitiesRepo.create({
+      title: data.title.trim().slice(0, 200),
+      company: data.company.trim().slice(0, 200),
+      description: data.description?.trim().slice(0, 5000) || "",
+      location: data.location.trim().slice(0, 200),
+      workplaceType: data.workplaceType || "Remote",
+      salary: data.salary?.trim().slice(0, 200) || "",
+      requiredSkills: Array.isArray(data.requiredSkills)
+        ? data.requiredSkills.map((s) => s.trim().slice(0, 100)).filter(Boolean)
+        : [],
+      experienceRequirement: data.experienceRequirement?.trim().slice(0, 500) || "",
+      jobUrl: data.jobUrl?.trim().slice(0, 500) || undefined,
+      recruiterName: data.recruiterName?.trim().slice(0, 200) || undefined,
+      recruiterEmail: data.recruiterEmail?.trim().slice(0, 200) || undefined,
+      recruiterContact: data.recruiterContact?.trim().slice(0, 200) || undefined,
+      applicationDeadline: data.applicationDeadline || undefined,
+      source: data.source?.trim().slice(0, 200) || "Direct Curated",
+      status: data.status || "open",
+      createdBy: session.id,
+    });
+
+    return { success: true, opportunity };
+  } catch (err: any) {
+    console.error("createCorOpportunityAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to create opportunity.") };
+  }
+}
+
+/**
+ * Update COR Opportunity
+ */
+export async function updateCorOpportunityAction(
+  id: string,
+  data: Partial<CorOpportunity>
+): Promise<{ success: boolean; opportunity?: CorOpportunity; error?: string }> {
+  try {
+    await requireAdminSession("cor:manage_opportunities");
+
+    if (!isValidId(id)) {
+      return { success: false, error: "Invalid opportunity ID format." };
+    }
+
+    const safe: Partial<CorOpportunity> = {};
+    if (typeof data.title === "string") safe.title = data.title.trim().slice(0, 200);
+    if (typeof data.company === "string") safe.company = data.company.trim().slice(0, 200);
+    if (typeof data.description === "string") safe.description = data.description.trim().slice(0, 5000);
+    if (typeof data.location === "string") safe.location = data.location.trim().slice(0, 200);
+    if (data.workplaceType && ["Remote", "Hybrid", "Onsite"].includes(data.workplaceType)) {
+      safe.workplaceType = data.workplaceType;
+    }
+    if (typeof data.salary === "string") safe.salary = data.salary.trim().slice(0, 200);
+    if (Array.isArray(data.requiredSkills)) {
+      safe.requiredSkills = data.requiredSkills.map((s) => s.trim().slice(0, 100)).filter(Boolean);
+    }
+    if (data.status && ["open", "paused", "closed"].includes(data.status)) {
+      safe.status = data.status;
+    }
+    if (data.jobUrl !== undefined) safe.jobUrl = data.jobUrl?.trim().slice(0, 500);
+
+    const opportunity = await corOpportunitiesRepo.update(id, safe);
+    if (!opportunity) {
+      return { success: false, error: "Opportunity not found." };
+    }
+
+    return { success: true, opportunity };
+  } catch (err: any) {
+    console.error("updateCorOpportunityAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to update opportunity.") };
+  }
+}
+
+/**
+ * Delete COR Opportunity
+ */
+export async function deleteCorOpportunityAction(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdminSession("cor:manage_opportunities");
+
+    if (!isValidId(id)) {
+      return { success: false, error: "Invalid opportunity ID format." };
+    }
+
+    const success = await corOpportunitiesRepo.remove(id);
+    return { success };
+  } catch (err: any) {
+    console.error("deleteCorOpportunityAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to delete opportunity.") };
+  }
+}
+
+/**
+ * Admin Creates Application for Member ("Apply for Member")
+ * Phase 11: Links Member + Opportunity + Creator
+ */
+export async function createCorApplicationAction(data: {
+  corMemberId: string;
+  opportunityId: string;
+  initialStatus?: CorApplicationStatus;
+  appliedDate?: string;
+  interviewDate?: string;
+  consultant?: string;
+  adminNote?: string;
+}): Promise<{ success: boolean; application?: CorApplication; error?: string }> {
+  try {
+    const session = await requireAdminSession("cor:apply");
+
+    if (!isValidId(data.corMemberId) || !isValidId(data.opportunityId)) {
+      return { success: false, error: "Invalid member or opportunity ID." };
+    }
+
+    const member = await corMembersRepo.getById(data.corMemberId);
+    if (!member) {
+      return { success: false, error: "Selected COR Member was not found." };
+    }
+
+    const opportunity = await corOpportunitiesRepo.getById(data.opportunityId);
+    if (!opportunity) {
+      return { success: false, error: "Selected Opportunity was not found." };
+    }
+
+    // Check if application already exists between this member and opportunity
+    const existing = await corApplicationsRepo.list();
+    const alreadyApplied = existing.some(
+      (a) => a.corMemberId === member.id && a.opportunityId === opportunity.id
+    );
+    if (alreadyApplied) {
+      return { success: false, error: "An application has already been submitted for this member to this opportunity." };
+    }
+
+    const application = await corApplicationsRepo.createApplication({
+      creatorId: member.creatorId || member.userId || member.id,
+      creatorName: member.name,
+      creatorEmail: member.creatorEmail,
+      creatorAvatar: member.creatorAvatar,
+      corMemberId: member.id,
+      opportunityId: opportunity.id,
+      opportunityTitle: opportunity.title,
+      company: opportunity.company,
+      location: opportunity.location,
+      salary: opportunity.salary,
+      workplaceType: opportunity.workplaceType,
+      jobUrl: opportunity.jobUrl,
+      recruiterContact: opportunity.recruiterContact,
+      initialStatus: data.initialStatus || "Recommended",
+      appliedDate: data.appliedDate,
+      interviewDate: data.interviewDate,
+      consultant: data.consultant || session.name || "Career Operations",
+      appliedBy: session.id,
+      appliedByName: session.name || "Career Operations",
+      adminNote: data.adminNote,
+    });
+
+    return { success: true, application };
+  } catch (err: any) {
+    console.error("createCorApplicationAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to create application.") };
+  }
+}
+
+/**
+ * Update COR Application Status (Interactive Dropdown)
+ * Phase 13: Updates status, preserves history, logs activity
+ */
+export async function updateCorApplicationStatusAction(
+  applicationId: string,
+  newStatus: CorApplicationStatus,
+  note?: string,
+  scheduledDate?: string
+): Promise<{ success: boolean; application?: CorApplication; error?: string }> {
+  try {
+    const session = await requireAdminSession("cor:update_application");
+
+    if (!isValidId(applicationId)) {
+      return { success: false, error: "Invalid application ID format." };
+    }
+
+    if (!isValidCorApplicationStatus(newStatus)) {
+      return { success: false, error: `Invalid application status '${newStatus}'.` };
+    }
+
+    const updated = await corApplicationsRepo.updateStatus(
+      applicationId,
+      newStatus,
+      session.id,
+      session.name || "Career Operations",
+      note,
+      scheduledDate
+    );
+
+    if (!updated) {
+      return { success: false, error: "Application not found or update failed." };
+    }
+
+    return { success: true, application: updated };
+  } catch (err: any) {
+    console.error("updateCorApplicationStatusAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to update application status.") };
+  }
+}
+
+/**
+ * Add Internal Admin Note (Member or Application)
+ */
+export async function addCorAdminNoteAction(data: {
+  corMemberId?: string;
+  applicationId?: string;
+  content: string;
+}): Promise<{ success: boolean; note?: CorAdminNote; error?: string }> {
+  try {
+    const session = await requireAdminSession("cor:manage");
+
+    if (!data.content?.trim()) {
+      return { success: false, error: "Note content cannot be empty." };
+    }
+
+    const cleanContent = data.content.trim().slice(0, 3000);
+
+    const note = await corNotesRepo.create({
+      corMemberId: data.corMemberId,
+      applicationId: data.applicationId,
+      authorId: session.id,
+      authorName: session.name || "Career Team Lead",
+      content: cleanContent,
+    });
+
+    return { success: true, note };
+  } catch (err: any) {
+    console.error("addCorAdminNoteAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to save internal note.") };
+  }
+}
+
+/**
+ * Delete Internal Admin Note
+ */
+export async function deleteCorAdminNoteAction(
+  noteId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdminSession("cor:manage");
+
+    if (!isValidId(noteId)) {
+      return { success: false, error: "Invalid note ID format." };
+    }
+
+    const success = await corNotesRepo.remove(noteId);
+    return { success };
+  } catch (err: any) {
+    console.error("deleteCorAdminNoteAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to delete note.") };
+  }
+}
+

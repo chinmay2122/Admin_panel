@@ -198,27 +198,420 @@ export type Database = {
         };
         Relationships: [];
       };
-      cor_members: {
+      cor_requests: {
         Row: {
           id: string;
-          user_id: string | null;
-          name: string;
-          status: "active" | "expired";
-          joined_at: string;
+          creator_id: string;
+          status: "pending" | "approved" | "declined";
+          current_role: string;
+          current_company: string | null;
+          experience_years: string | null;
+          employment_status: string | null;
+          desired_role: string;
+          skills: string[];
+          secondary_skills: string[] | null;
+          specialization: string | null;
+          education_degree: string | null;
+          education_institution: string | null;
+          education_year: string | null;
+          experience_summary: string | null;
+          work_history: Json | null;
+          portfolio_url: string | null;
+          linkedin_url: string | null;
+          behance_url: string | null;
+          github_url: string | null;
+          website_url: string | null;
+          resume_url: string | null;
+          portfolio_docs: string[] | null;
+          expected_salary: string | null;
+          current_salary: string | null;
+          opportunity_type: string | null;
+          preferred_work_type: string | null;
+          career_goals: string | null;
+          additional_notes: string | null;
+          admin_notes: string | null;
+          decline_reason: string | null;
+          approved_by: string | null;
+          approved_at: string | null;
+          declined_by: string | null;
+          declined_at: string | null;
+          created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
-          user_id?: string | null;
-          name: string;
-          status?: "active" | "expired";
-          joined_at?: string;
+          creator_id: string;
+          status?: "pending" | "approved" | "declined";
+          current_role: string;
+          current_company?: string | null;
+          experience_years?: string | null;
+          employment_status?: string | null;
+          desired_role: string;
+          skills?: string[];
+          secondary_skills?: string[] | null;
+          specialization?: string | null;
+          education_degree?: string | null;
+          education_institution?: string | null;
+          education_year?: string | null;
+          experience_summary?: string | null;
+          work_history?: Json | null;
+          portfolio_url?: string | null;
+          linkedin_url?: string | null;
+          behance_url?: string | null;
+          github_url?: string | null;
+          website_url?: string | null;
+          resume_url?: string | null;
+          portfolio_docs?: string[] | null;
+          expected_salary?: string | null;
+          current_salary?: string | null;
+          opportunity_type?: string | null;
+          preferred_work_type?: string | null;
+          career_goals?: string | null;
+          additional_notes?: string | null;
+          admin_notes?: string | null;
+          decline_reason?: string | null;
+          approved_by?: string | null;
+          approved_at?: string | null;
+          declined_by?: string | null;
+          declined_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
+          creator_id?: string;
+          status?: "pending" | "approved" | "declined";
+          current_role?: string;
+          current_company?: string | null;
+          experience_years?: string | null;
+          employment_status?: string | null;
+          desired_role?: string;
+          skills?: string[];
+          secondary_skills?: string[] | null;
+          specialization?: string | null;
+          education_degree?: string | null;
+          education_institution?: string | null;
+          education_year?: string | null;
+          experience_summary?: string | null;
+          work_history?: Json | null;
+          portfolio_url?: string | null;
+          linkedin_url?: string | null;
+          behance_url?: string | null;
+          github_url?: string | null;
+          website_url?: string | null;
+          resume_url?: string | null;
+          portfolio_docs?: string[] | null;
+          expected_salary?: string | null;
+          current_salary?: string | null;
+          opportunity_type?: string | null;
+          preferred_work_type?: string | null;
+          career_goals?: string | null;
+          additional_notes?: string | null;
+          admin_notes?: string | null;
+          decline_reason?: string | null;
+          approved_by?: string | null;
+          approved_at?: string | null;
+          declined_by?: string | null;
+          declined_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cor_members: {
+        Row: {
+          id: string;
+          creator_id: string;
           user_id?: string | null;
-          name?: string;
-          status?: "active" | "expired";
+          name?: string | null;
+          request_id: string | null;
+          status: "active" | "paused" | "completed" | "removed" | "expired";
+          desired_role: string | null;
+          skills: string[] | null;
+          experience_years: string | null;
+          preferred_work_type: string | null;
+          internal_notes: string | null;
+          career_strategy: string | null;
+          approved_by: string | null;
+          approved_at: string | null;
+          joined_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          creator_id: string;
+          user_id?: string | null;
+          name?: string | null;
+          request_id?: string | null;
+          status?: "active" | "paused" | "completed" | "removed" | "expired";
+          desired_role?: string | null;
+          skills?: string[] | null;
+          experience_years?: string | null;
+          preferred_work_type?: string | null;
+          internal_notes?: string | null;
+          career_strategy?: string | null;
+          approved_by?: string | null;
+          approved_at?: string | null;
           joined_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          creator_id?: string;
+          user_id?: string | null;
+          name?: string | null;
+          request_id?: string | null;
+          status?: "active" | "paused" | "completed" | "removed" | "expired";
+          desired_role?: string | null;
+          skills?: string[] | null;
+          experience_years?: string | null;
+          preferred_work_type?: string | null;
+          internal_notes?: string | null;
+          career_strategy?: string | null;
+          approved_by?: string | null;
+          approved_at?: string | null;
+          joined_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cor_opportunities: {
+        Row: {
+          id: string;
+          title: string;
+          company: string;
+          description: string | null;
+          location: string;
+          workplace_type: "Remote" | "Hybrid" | "Onsite";
+          salary: string | null;
+          required_skills: string[];
+          experience_requirement: string | null;
+          job_url: string | null;
+          recruiter_name: string | null;
+          recruiter_email: string | null;
+          recruiter_contact: string | null;
+          application_deadline: string | null;
+          source: string | null;
+          status: "open" | "paused" | "closed";
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          company: string;
+          description?: string | null;
+          location: string;
+          workplace_type?: "Remote" | "Hybrid" | "Onsite";
+          salary?: string | null;
+          required_skills?: string[];
+          experience_requirement?: string | null;
+          job_url?: string | null;
+          recruiter_name?: string | null;
+          recruiter_email?: string | null;
+          recruiter_contact?: string | null;
+          application_deadline?: string | null;
+          source?: string | null;
+          status?: "open" | "paused" | "closed";
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          company?: string;
+          description?: string | null;
+          location?: string;
+          workplace_type?: "Remote" | "Hybrid" | "Onsite";
+          salary?: string | null;
+          required_skills?: string[];
+          experience_requirement?: string | null;
+          job_url?: string | null;
+          recruiter_name?: string | null;
+          recruiter_email?: string | null;
+          recruiter_contact?: string | null;
+          application_deadline?: string | null;
+          source?: string | null;
+          status?: "open" | "paused" | "closed";
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cor_applications: {
+        Row: {
+          id: string;
+          creator_id: string;
+          cor_member_id: string;
+          opportunity_id: string;
+          status:
+            | "Recommended"
+            | "Preparing Application"
+            | "Applied"
+            | "Screening"
+            | "Interview"
+            | "Final Round"
+            | "Offer"
+            | "Rejected";
+          applied_date: string | null;
+          interview_date: string | null;
+          consultant: string;
+          applied_by: string | null;
+          applied_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          creator_id: string;
+          cor_member_id: string;
+          opportunity_id: string;
+          status?:
+            | "Recommended"
+            | "Preparing Application"
+            | "Applied"
+            | "Screening"
+            | "Interview"
+            | "Final Round"
+            | "Offer"
+            | "Rejected";
+          applied_date?: string | null;
+          interview_date?: string | null;
+          consultant?: string;
+          applied_by?: string | null;
+          applied_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          creator_id?: string;
+          cor_member_id?: string;
+          opportunity_id?: string;
+          status?:
+            | "Recommended"
+            | "Preparing Application"
+            | "Applied"
+            | "Screening"
+            | "Interview"
+            | "Final Round"
+            | "Offer"
+            | "Rejected";
+          applied_date?: string | null;
+          interview_date?: string | null;
+          consultant?: string;
+          applied_by?: string | null;
+          applied_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cor_application_events: {
+        Row: {
+          id: string;
+          application_id: string;
+          previous_status: string | null;
+          new_status: string;
+          changed_by: string | null;
+          changed_by_name: string;
+          note: string | null;
+          scheduled_date: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          application_id: string;
+          previous_status?: string | null;
+          new_status: string;
+          changed_by?: string | null;
+          changed_by_name?: string;
+          note?: string | null;
+          scheduled_date?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          application_id?: string;
+          previous_status?: string | null;
+          new_status?: string;
+          changed_by?: string | null;
+          changed_by_name?: string;
+          note?: string | null;
+          scheduled_date?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      cor_admin_notes: {
+        Row: {
+          id: string;
+          cor_member_id: string | null;
+          application_id: string | null;
+          author_id: string | null;
+          author_name: string;
+          content: string;
+          is_internal_only: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          cor_member_id?: string | null;
+          application_id?: string | null;
+          author_id?: string | null;
+          author_name: string;
+          content: string;
+          is_internal_only?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          cor_member_id?: string | null;
+          application_id?: string | null;
+          author_id?: string | null;
+          author_name?: string;
+          content?: string;
+          is_internal_only?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      cor_activity: {
+        Row: {
+          id: string;
+          creator_id: string | null;
+          cor_member_id: string | null;
+          application_id: string | null;
+          action_type: string;
+          description: string;
+          actor_id: string | null;
+          actor_name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          creator_id?: string | null;
+          cor_member_id?: string | null;
+          application_id?: string | null;
+          action_type: string;
+          description: string;
+          actor_id?: string | null;
+          actor_name?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          creator_id?: string | null;
+          cor_member_id?: string | null;
+          application_id?: string | null;
+          action_type?: string;
+          description?: string;
+          actor_id?: string | null;
+          actor_name?: string;
+          created_at?: string;
         };
         Relationships: [];
       };

@@ -56,14 +56,199 @@ export interface Artwork {
   availability?: string;
 }
 
-export type CorMemberStatus = "active" | "expired";
+export type CorMemberStatus = "active" | "paused" | "completed" | "removed" | "expired";
 
 export interface CorMember {
   id: string;
-  userId: string;
+  creatorId?: string;
+  userId?: string;
   name: string;
+  creatorName?: string;
+  creatorEmail?: string;
+  creatorAvatar?: string;
+  location?: string;
+  desiredRole?: string;
+  skills?: string[];
+  experienceYears?: string;
+  preferredWorkType?: string;
+  requestId?: string;
   joinedAt: string;
   status: CorMemberStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  internalNotes?: string;
+  careerStrategy?: string;
+  activeApplicationsCount?: number;
+  latestApplicationStatus?: CorApplicationStatus;
+  lastActivityAt?: string;
+}
+
+export type CorRequestStatus = "pending" | "approved" | "declined";
+
+export interface CorRequestEducation {
+  degree?: string;
+  institution?: string;
+  year?: string;
+}
+
+export interface CorRequestWorkItem {
+  company: string;
+  role: string;
+  dates: string;
+  responsibilities: string;
+}
+
+export interface CorRequestLinks {
+  portfolio?: string;
+  linkedin?: string;
+  behance?: string;
+  github?: string;
+  website?: string;
+}
+
+export interface CorRequestDocuments {
+  resumeUrl?: string;
+  portfolioUrl?: string;
+}
+
+export interface CorRequestGoals {
+  expectedSalary?: string;
+  currentSalary?: string;
+  desiredRole?: string;
+  opportunityType?: string;
+  preferredWorkType?: string;
+  additionalNotes?: string;
+}
+
+export interface CorRequest {
+  id: string;
+  creatorId: string;
+  creatorName: string;
+  creatorEmail: string;
+  creatorAvatar?: string;
+  location?: string;
+  phone?: string;
+  currentRole: string;
+  currentCompany?: string;
+  experienceYears: string;
+  employmentStatus?: string;
+  desiredRole: string;
+  skills: string[];
+  secondarySkills?: string[];
+  specialization?: string;
+  education?: CorRequestEducation;
+  experienceSummary?: string;
+  workHistory?: CorRequestWorkItem[];
+  links?: CorRequestLinks;
+  documents?: CorRequestDocuments;
+  careerGoals?: CorRequestGoals;
+  status: CorRequestStatus;
+  adminNotes?: string;
+  declineReason?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  declinedBy?: string;
+  declinedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CorOpportunityWorkplaceType = "Remote" | "Hybrid" | "Onsite";
+export type CorOpportunityStatus = "open" | "paused" | "closed";
+
+export interface CorOpportunity {
+  id: string;
+  title: string;
+  company: string;
+  description: string;
+  location: string;
+  workplaceType: CorOpportunityWorkplaceType;
+  salary: string;
+  requiredSkills: string[];
+  experienceRequirement: string;
+  jobUrl?: string;
+  recruiterName?: string;
+  recruiterEmail?: string;
+  recruiterContact?: string;
+  applicationDeadline?: string;
+  source?: string;
+  status: CorOpportunityStatus;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  appliedCandidatesCount?: number;
+}
+
+export type CorApplicationStatus =
+  | "Recommended"
+  | "Preparing Application"
+  | "Applied"
+  | "Screening"
+  | "Interview"
+  | "Final Round"
+  | "Offer"
+  | "Rejected";
+
+export interface CorApplication {
+  id: string;
+  creatorId: string;
+  creatorName: string;
+  creatorEmail: string;
+  creatorAvatar?: string;
+  creatorRole?: string;
+  creatorSkills?: string[];
+  corMemberId: string;
+  opportunityId: string;
+  opportunityTitle: string;
+  company: string;
+  location?: string;
+  salary?: string;
+  workplaceType?: string;
+  jobUrl?: string;
+  recruiterContact?: string;
+  status: CorApplicationStatus;
+  appliedDate: string;
+  interviewDate?: string;
+  consultant: string;
+  appliedBy?: string;
+  appliedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CorApplicationEvent {
+  id: string;
+  applicationId: string;
+  previousStatus?: string;
+  newStatus: CorApplicationStatus;
+  changedBy?: string;
+  changedByName: string;
+  note?: string;
+  scheduledDate?: string;
+  createdAt: string;
+}
+
+export interface CorAdminNote {
+  id: string;
+  corMemberId?: string;
+  applicationId?: string;
+  authorId?: string;
+  authorName: string;
+  content: string;
+  isInternalOnly: boolean;
+  createdAt: string;
+}
+
+export interface CorActivity {
+  id: string;
+  creatorId?: string;
+  corMemberId?: string;
+  applicationId?: string;
+  actionType: string;
+  description: string;
+  actorId?: string;
+  actorName?: string;
+  createdAt: string;
 }
 
 export type JobStatus = "open" | "closed";
@@ -82,7 +267,12 @@ export interface Job {
   applicantCount?: number;
 }
 
-export type ApplicationStatus = "pending" | "shortlisted" | "accepted" | "rejected";
+export type ApplicationStatus =
+  | "pending"
+  | "shortlisted"
+  | "accepted"
+  | "rejected"
+  | CorApplicationStatus;
 
 export interface Application {
   id: string;
@@ -128,7 +318,26 @@ export interface ArtworkFilters {
 
 export interface CorFilters {
   query?: string;
-  status?: CorMemberStatus;
+  status?: CorMemberStatus | "all";
+}
+
+export interface CorRequestFilters {
+  query?: string;
+  status?: CorRequestStatus | "all";
+  role?: string;
+}
+
+export interface CorOpportunityFilters {
+  query?: string;
+  status?: CorOpportunityStatus | "all";
+  workplaceType?: string;
+}
+
+export interface CorApplicationFilters {
+  query?: string;
+  status?: CorApplicationStatus | "all";
+  company?: string;
+  candidate?: string;
 }
 
 export interface JobFilters {

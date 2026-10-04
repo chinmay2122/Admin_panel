@@ -446,3 +446,182 @@ CREATE POLICY "Admins insert settings audit logs"
   WITH CHECK ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'Admin');
 
 REVOKE UPDATE, DELETE, TRUNCATE ON public.settings_audit_logs FROM authenticated, anon;
+
+-- ==============================================================================
+-- 13. COR (CAREER OPERATIONS REPRESENTATION) WORKFLOW SYSTEM
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS public.cor_requests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'declined')),
+  current_role text NOT NULL,
+  current_company text,
+  experience_years text,
+  employment_status text,
+  desired_role text NOT NULL,
+  skills text[] NOT NULL DEFAULT '{}'::text[],
+  secondary_skills text[] DEFAULT '{}'::text[],
+  specialization text,
+  education_degree text,
+  education_institution text,
+  education_year text,
+  experience_summary text,
+  work_history jsonb DEFAULT '[]'::jsonb,
+  portfolio_url text,
+  linkedin_url text,
+  behance_url text,
+  github_url text,
+  website_url text,
+  resume_url text,
+  portfolio_docs text[] DEFAULT '{}'::text[],
+  expected_salary text,
+  current_salary text,
+  opportunity_type text,
+  preferred_work_type text,
+  career_goals text,
+  additional_notes text,
+  admin_notes text,
+  decline_reason text,
+  approved_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  approved_at timestamptz,
+  declined_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  declined_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT unique_creator_cor_request UNIQUE (creator_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cor_requests_creator_id ON public.cor_requests(creator_id);
+CREATE INDEX IF NOT EXISTS idx_cor_requests_status ON public.cor_requests(status);
+CREATE INDEX IF NOT EXISTS idx_cor_requests_created_at ON public.cor_requests(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.cor_members (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id uuid NOT NULL UNIQUE REFERENCES public.profiles(id) ON DELETE CASCADE,
+  request_id uuid REFERENCES public.cor_requests(id) ON DELETE SET NULL,
+  status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'removed', 'expired')),
+  desired_role text,
+  skills text[] DEFAULT '{}'::text[],
+  experience_years text,
+  preferred_work_type text,
+  internal_notes text,
+  career_strategy text,
+  approved_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  approved_at timestamptz DEFAULT now(),
+  joined_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cor_members_creator_id ON public.cor_members(creator_id);
+CREATE INDEX IF NOT EXISTS idx_cor_members_status ON public.cor_members(status);
+CREATE INDEX IF NOT EXISTS idx_cor_members_joined_at ON public.cor_members(joined_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.cor_opportunities (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  company text NOT NULL,
+  description text,
+  location text NOT NULL,
+  workplace_type text NOT NULL DEFAULT 'Remote' CHECK (workplace_type IN ('Remote', 'Hybrid', 'Onsite')),
+  salary text,
+  required_skills text[] NOT NULL DEFAULT '{}'::text[],
+  experience_requirement text,
+  job_url text,
+  recruiter_name text,
+  recruiter_email text,
+  recruiter_contact text,
+  application_deadline date,
+  source text,
+  status text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'paused', 'closed')),
+  created_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cor_opps_status ON public.cor_opportunities(status);
+CREATE INDEX IF NOT EXISTS idx_cor_opps_created_at ON public.cor_opportunities(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.cor_applications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  cor_member_id uuid NOT NULL REFERENCES public.cor_members(id) ON DELETE CASCADE,
+  opportunity_id uuid NOT NULL REFERENCES public.cor_opportunities(id) ON DELETE CASCADE,
+  status text NOT NULL DEFAULT 'Recommended' CHECK (status IN (
+    'Recommended',
+    'Preparing Application',
+    'Applied',
+    'Screening',
+    'Interview',
+    'Final Round',
+    'Offer',
+    'Rejected'
+  )),
+  applied_date date DEFAULT CURRENT_DATE,
+  interview_date date,
+  consultant text NOT NULL DEFAULT 'Career Operations',
+  applied_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  applied_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT unique_member_opportunity_app UNIQUE (cor_member_id, opportunity_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cor_apps_creator_id ON public.cor_applications(creator_id);
+CREATE INDEX IF NOT EXISTS idx_cor_apps_cor_member_id ON public.cor_applications(cor_member_id);
+CREATE INDEX IF NOT EXISTS idx_cor_apps_opportunity_id ON public.cor_applications(opportunity_id);
+CREATE INDEX IF NOT EXISTS idx_cor_apps_status ON public.cor_applications(status);
+CREATE INDEX IF NOT EXISTS idx_cor_apps_created_at ON public.cor_applications(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.cor_application_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  application_id uuid NOT NULL REFERENCES public.cor_applications(id) ON DELETE CASCADE,
+  previous_status text,
+  new_status text NOT NULL,
+  changed_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  changed_by_name text NOT NULL DEFAULT 'Career Operations',
+  note text,
+  scheduled_date date,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cor_app_events_app_id ON public.cor_application_events(application_id);
+CREATE INDEX IF NOT EXISTS idx_cor_app_events_created_at ON public.cor_application_events(created_at ASC);
+
+CREATE TABLE IF NOT EXISTS public.cor_admin_notes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  cor_member_id uuid REFERENCES public.cor_members(id) ON DELETE CASCADE,
+  application_id uuid REFERENCES public.cor_applications(id) ON DELETE CASCADE,
+  author_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  author_name text NOT NULL,
+  content text NOT NULL,
+  is_internal_only boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cor_notes_member_id ON public.cor_admin_notes(cor_member_id);
+CREATE INDEX IF NOT EXISTS idx_cor_notes_app_id ON public.cor_admin_notes(application_id);
+CREATE INDEX IF NOT EXISTS idx_cor_notes_created_at ON public.cor_admin_notes(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.cor_activity (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  cor_member_id uuid REFERENCES public.cor_members(id) ON DELETE CASCADE,
+  application_id uuid REFERENCES public.cor_applications(id) ON DELETE CASCADE,
+  action_type text NOT NULL,
+  description text NOT NULL,
+  actor_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  actor_name text NOT NULL DEFAULT 'Admin',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cor_activity_creator_id ON public.cor_activity(creator_id);
+CREATE INDEX IF NOT EXISTS idx_cor_activity_created_at ON public.cor_activity(created_at DESC);
+
+ALTER TABLE public.cor_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cor_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cor_opportunities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cor_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cor_application_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cor_admin_notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cor_activity ENABLE ROW LEVEL SECURITY;

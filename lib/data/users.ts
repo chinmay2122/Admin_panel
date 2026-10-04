@@ -1,8 +1,7 @@
 import { User, UserFilters } from "../types";
-import { seedUsers } from "./seed";
-import { getSupabaseAdmin } from "../supabase/server";
+import { getSupabaseAdmin, isSupabaseConfigured } from "../supabase/server";
 
-let usersStore: User[] = [...seedUsers];
+let usersStore: User[] = [];
 
 function mapUserFromSupabase(row: any): User {
   return {
@@ -19,8 +18,7 @@ function mapUserFromSupabase(row: any): User {
 
 export const usersRepo = {
   /**
-   * List users with optional filtering.
-   * Pulls from Supabase 'profiles' when configured, otherwise uses in-memory data.
+   * List users with optional filtering directly from Supabase profiles.
    */
   async list(filters?: UserFilters): Promise<User[]> {
     const supabase = getSupabaseAdmin();
@@ -35,7 +33,7 @@ export const usersRepo = {
 
         const { data, error } = await query.order("created_at", { ascending: false });
 
-        if (!error && data) {
+        if (!error && Array.isArray(data)) {
           let list = data.map(mapUserFromSupabase);
 
           if (filters?.query) {
@@ -60,14 +58,19 @@ export const usersRepo = {
           }
 
           return list;
+        } else if (error) {
+          console.error("Supabase profiles query error:", error);
         }
       } catch (err) {
-        console.warn("Supabase profiles query failed, falling back to local dataset:", err);
+        console.error("Supabase profiles query failed:", err);
       }
     }
 
-    let result = [...usersStore];
+    if (isSupabaseConfigured()) {
+      return [];
+    }
 
+    let result = [...usersStore];
     if (!filters) return result;
 
     if (filters.query) {
@@ -78,23 +81,18 @@ export const usersRepo = {
           u.email.toLowerCase().includes(q)
       );
     }
-
     if (filters.role) {
       result = result.filter((u) => u.role === filters.role);
     }
-
     if (filters.plan) {
       result = result.filter((u) => u.plan === filters.plan);
     }
-
     if (filters.status) {
       result = result.filter((u) => u.status === filters.status);
     }
-
     if (typeof filters.isCorMember === "boolean") {
       result = result.filter((u) => u.isCorMember === filters.isCorMember);
     }
-
     return result;
   },
 
@@ -115,8 +113,12 @@ export const usersRepo = {
           return mapUserFromSupabase(data);
         }
       } catch (err) {
-        console.warn("Supabase user getById failed:", err);
+        console.error("Supabase user getById failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return null;
     }
 
     const user = usersStore.find((u) => u.id === id);
@@ -149,8 +151,12 @@ export const usersRepo = {
           return mapUserFromSupabase(updated);
         }
       } catch (err) {
-        console.warn("Supabase user update failed:", err);
+        console.error("Supabase user update failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return null;
     }
 
     const index = usersStore.findIndex((u) => u.id === id);
@@ -175,8 +181,12 @@ export const usersRepo = {
         const { error } = await supabase.from("profiles").delete().eq("id", id);
         if (!error) return true;
       } catch (err) {
-        console.warn("Supabase user remove failed:", err);
+        console.error("Supabase user remove failed:", err);
       }
+    }
+
+    if (isSupabaseConfigured()) {
+      return false;
     }
 
     const initialLen = usersStore.length;

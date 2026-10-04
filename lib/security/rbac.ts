@@ -27,7 +27,14 @@ export type Permission =
   | "analytics:view"
   | "audit:view"
   | "audit:export"
-  | "settings:manage";
+  | "settings:manage"
+  | "cor:view"
+  | "cor:manage"
+  | "cor:approve_request"
+  | "cor:decline_request"
+  | "cor:apply"
+  | "cor:update_application"
+  | "cor:manage_opportunities";
 
 const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
   super_admin: [
@@ -46,6 +53,13 @@ const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
     "audit:view",
     "audit:export",
     "settings:manage",
+    "cor:view",
+    "cor:manage",
+    "cor:approve_request",
+    "cor:decline_request",
+    "cor:apply",
+    "cor:update_application",
+    "cor:manage_opportunities",
   ],
   admin: [
     "report:view",
@@ -62,6 +76,13 @@ const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
     "audit:view",
     "audit:export",
     "settings:manage",
+    "cor:view",
+    "cor:manage",
+    "cor:approve_request",
+    "cor:decline_request",
+    "cor:apply",
+    "cor:update_application",
+    "cor:manage_opportunities",
   ],
   moderator: [
     "report:view",
