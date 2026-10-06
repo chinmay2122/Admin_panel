@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
 
       return new NextResponse(zipBuffer as unknown as BodyInit, {
         headers: {
-          "Content-Disposition": `attachment; filename="iRAS-Artworks-${now}.zip"`,
+          "Content-Disposition": `attachment; filename="ERAS-Artworks-${now}.zip"`,
           "Content-Type": "application/zip",
         },
       });
@@ -112,11 +112,11 @@ export async function POST(req: NextRequest) {
     // =============================
     let data: any[] = [];
     let columns: { header: string; key: (r: any) => any }[] = [];
-    let filename = `iRAS-Export-${now}.csv`;
+    let filename = `ERAS-Export-${now}.csv`;
 
     if (type === "creators") {
       data = await creatorsRepo.list(filters);
-      filename = `iRAS-Creators-${now}.csv`;
+      filename = `ERAS-Creators-${now}.csv`;
       columns = [
         { header: "ID", key: (r: any) => r.id },
         { header: "Creator Name", key: (r: any) => r.name },
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
       ];
     } else if (type === "collectors" || type === "users") {
       data = await collectorsRepo.list(filters);
-      filename = `iRAS-Collectors-${now}.csv`;
+      filename = `ERAS-Collectors-${now}.csv`;
       columns = [
         { header: "ID", key: (r: any) => r.id },
         { header: "Collector Name", key: (r: any) => r.name },
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
       ];
     } else if (type === "reports") {
       data = await reportsRepo.list(filters);
-      filename = `iRAS-Reports-${now}.csv`;
+      filename = `ERAS-Reports-${now}.csv`;
       columns = [
         { header: "Report ID", key: (r: any) => r.id },
         { header: "Reported Artwork", key: (r: any) => r.artworkTitle },
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
       ];
     } else if (type === "cor-members") {
       data = await corRepo.list(filters);
-      filename = `iRAS-COR-Members-${now}.csv`;
+      filename = `ERAS-COR-Members-${now}.csv`;
       columns = [
         { header: "ID", key: (r: any) => r.id },
         { header: "Creator", key: (r: any) => r.name },
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
       ];
     } else if (type === "cor-requests") {
       data = await corRequestsRepo.list(filters);
-      filename = `iRAS-COR-Requests-${now}.csv`;
+      filename = `ERAS-COR-Requests-${now}.csv`;
       columns = [
         { header: "ID", key: (r: any) => r.id },
         { header: "Creator", key: (r: any) => r.creatorName },
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
       ];
     } else if (type === "cor-opportunities") {
       data = await corOpportunitiesRepo.list(filters);
-      filename = `iRAS-COR-Opportunities-${now}.csv`;
+      filename = `ERAS-COR-Opportunities-${now}.csv`;
       columns = [
         { header: "ID", key: (r: any) => r.id },
         { header: "Company", key: (r: any) => r.company },
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
       ];
     } else if (type === "cor-applications") {
       data = await corApplicationsRepo.list(filters);
-      filename = `iRAS-COR-Applications-${now}.csv`;
+      filename = `ERAS-COR-Applications-${now}.csv`;
       columns = [
         { header: "ID", key: (r: any) => r.id },
         { header: "Creator", key: (r: any) => r.creatorName },

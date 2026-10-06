@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.platform_settings (
   cor_enabled boolean NOT NULL DEFAULT true,
   featured_creator_controls_enabled boolean NOT NULL DEFAULT true,
   moderation_settings_enabled boolean NOT NULL DEFAULT true,
-  platform_announcement text NOT NULL DEFAULT 'Welcome to the iRAS Studio prototype.',
+  platform_announcement text NOT NULL DEFAULT 'Welcome to the ERAS Studio prototype.',
   default_profile_visibility text NOT NULL DEFAULT 'public' CHECK (default_profile_visibility = ANY (ARRAY['public'::text, 'private'::text])),
   updated_at timestamp with time zone DEFAULT now(),
   updated_by text
@@ -39,7 +39,7 @@ INSERT INTO public.platform_settings (
   true,
   true,
   true,
-  'Welcome to the iRAS Studio prototype.',
+  'Welcome to the ERAS Studio prototype.',
   'public'
 ) ON CONFLICT (id) DO NOTHING;
 
