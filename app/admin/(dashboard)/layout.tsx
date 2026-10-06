@@ -41,8 +41,6 @@ const navItems: NavItem[] = [
   { name: "Artworks", href: "/admin/artworks", icon: Palette },
   { name: "Reports", href: "/admin/reports", icon: ShieldAlert },
   { name: "COR", href: "/admin/cor", icon: Award },
-  { name: "Jobs", href: "/admin/jobs", icon: Briefcase },
-  { name: "Applications", href: "/admin/applications", icon: FileText },
   { name: "Studio Settings", href: "/admin/settings", icon: Sliders },
 ];
 
@@ -65,8 +63,6 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes("/admin/cor/applications")) return "COR Applications";
   if (pathname.includes("/admin/cor/opportunities")) return "COR Opportunities";
   if (pathname.includes("/admin/cor")) return "Career Operations & Representation (COR)";
-  if (pathname.includes("/admin/jobs")) return "Jobs";
-  if (pathname.includes("/admin/applications")) return "Applications";
   if (pathname.includes("/admin/settings")) return "Studio settings";
   return "Overview";
 }
