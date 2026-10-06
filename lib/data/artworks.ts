@@ -178,7 +178,7 @@ export const artworksRepo = {
   },
 
   /**
-   * Create a new artwork.
+   * Create a new artwork directly in Supabase database.
    */
   async create(data: {
     title: string;
@@ -198,42 +198,118 @@ export const artworksRepo = {
     additionalImages?: string[];
   }): Promise<Artwork> {
     const supabase = getSupabaseAdmin();
-    if (supabase && data.creatorId) {
-      try {
-        const payload: Record<string, any> = {
-          title: data.title,
-          creator_id: data.creatorId,
-          artist_name: data.creatorName,
-          art_type: data.medium || "Mixed Media",
-          dimensions: data.dimensions || "Dimensions unavailable",
-          price: data.price || 0,
-          image_url: data.imageUrl || "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
-          status: toSupabaseStatus(data.status),
-          is_published: data.status === "published",
-        };
+    if (supabase) {
+      // 1. Resolve or create creator profile in Supabase profiles table
+      let validCreatorId = data.creatorId;
+      const isValidUuid =
+        typeof validCreatorId === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(validCreatorId);
 
-        if (data.year) payload.year = data.year;
-        if (data.location) payload.location = data.location;
-        if (data.collection) payload.collection = data.collection;
-        if (data.description) payload.description = data.description;
-        if (data.priceVisibility) payload.price_visibility = data.priceVisibility;
-        if (data.additionalImages && data.additionalImages.length > 0) {
-          payload.additional_images = data.additionalImages;
+      if (isValidUuid && typeof validCreatorId === "string") {
+        const { data: existingProf } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .eq("id", validCreatorId)
+          .maybeSingle();
+
+        if (!existingProf) {
+          validCreatorId = undefined;
         }
+      } else {
+        validCreatorId = undefined;
+      }
 
-        const { data: created, error } = await (supabase.from("artworks") as any)
-          .insert(payload)
-          .select("*, profiles(*)")
-          .single();
+      // If not resolved by valid UUID, look up by name or create a profile in Supabase
+      if (!validCreatorId) {
+        const cleanName = (data.creatorName || "").trim();
+        if (cleanName) {
+          const { data: matchedProf } = await supabase
+            .from("profiles")
+            .select("id, full_name")
+            .ilike("full_name", cleanName)
+            .limit(1)
+            .maybeSingle();
 
-        if (!error && created) {
-          return mapFromSupabase(created);
+          if (matchedProf?.id) {
+            validCreatorId = matchedProf.id;
+          } else {
+            // Create a registered profile for this creator in Supabase profiles table
+            const newCreatorId = crypto.randomUUID();
+            const cleanEmail = `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${Date.now().toString(36)}@erasstudio.com`;
+            const { data: newProf, error: createProfErr } = await (supabase.from("profiles") as any)
+              .insert({
+                id: newCreatorId,
+                full_name: cleanName,
+                email: cleanEmail,
+                role: "Creator",
+                primary_medium: data.medium || "Visual Arts",
+                plan: "free",
+                is_premium: false,
+                status: "active",
+              })
+              .select("id")
+              .single();
+
+            if (!createProfErr && newProf?.id) {
+              validCreatorId = newProf.id;
+            }
+          }
         }
-      } catch (err) {
-        console.warn("Supabase create artwork failed, using local fallback:", err);
+      }
+
+      if (!validCreatorId) {
+        // Fallback: assign to the first existing creator or profile in Supabase
+        const { data: anyProf } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .limit(1)
+          .maybeSingle();
+
+        if (anyProf?.id) {
+          validCreatorId = anyProf.id;
+        } else {
+          throw new Error("Cannot create artwork: No creator profile available in database.");
+        }
+      }
+
+      const payload: Record<string, any> = {
+        creator_id: validCreatorId,
+        title: data.title.trim(),
+        artist_name: data.creatorName?.trim() || "Artist",
+        art_type: data.medium || "Mixed Media",
+        dimensions: data.dimensions || "Dimensions unavailable",
+        price: typeof data.price === "number" && data.price >= 0 ? data.price : 0,
+        image_url: data.imageUrl || "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
+        status: toSupabaseStatus(data.status),
+        is_published: data.status === "published",
+        year: data.year?.trim() || new Date().getFullYear().toString(),
+        location: data.location?.trim() || null,
+        collection: data.collection?.trim() || null,
+        description: data.description?.trim() || null,
+        price_visibility: data.priceVisibility || "Show Price",
+        additional_images: data.additionalImages || [],
+      };
+
+      const { data: created, error } = await (supabase.from("artworks") as any)
+        .insert(payload)
+        .select("*, profiles(*)")
+        .single();
+
+      if (error) {
+        console.error("Supabase insert artwork failed:", error);
+        throw new Error(`Database artwork insertion failed: ${error.message}`);
+      }
+
+      if (created) {
+        return mapFromSupabase(created);
       }
     }
 
+    if (isSupabaseConfigured()) {
+      throw new Error("Supabase is configured but database client was unavailable.");
+    }
+
+    // In-memory fallback only when Supabase is completely unconfigured
     const newArtwork: Artwork = {
       id: `art_${Date.now().toString(36)}`,
       title: data.title,
