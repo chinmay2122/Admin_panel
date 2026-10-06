@@ -51,6 +51,7 @@ export function CreatorDetailClient({
   const [activeTab, setActiveTab] = useState<"overview" | "artworks" | "cor">("overview");
 
   const [creatorState, setCreatorState] = useState<Creator>(creator);
+  const [isArchived, setIsArchived] = useState(creator.status === "pending");
   const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
@@ -58,7 +59,7 @@ export function CreatorDetailClient({
 
   const isSuspended = creatorState.status === "suspended";
 
-  // Suspend / Restore Access
+  // Suspend / Revert Suspension
   const handleConfirmSuspendToggle = async () => {
     const nextStatus: CreatorStatus = isSuspended ? "active" : "suspended";
     setIsActionLoading(true);
@@ -66,14 +67,16 @@ export function CreatorDetailClient({
       const res = await updateCreatorAction(creatorState.id, { status: nextStatus });
       if (!res.success) {
         toast.error(
-          isSuspended ? "Failed to restore access" : "Failed to suspend creator",
+          isSuspended ? "Failed to revert suspension" : "Failed to suspend creator",
           res.error || "Please try again."
         );
       } else {
         setCreatorState((prev) => ({ ...prev, status: nextStatus }));
         toast.success(
-          nextStatus === "suspended" ? "Creator Suspended" : "Access Restored",
-          `${creatorState.name} is now ${nextStatus}.`
+          nextStatus === "suspended" ? "Creator Suspended" : "Suspension Reverted",
+          nextStatus === "suspended"
+            ? `${creatorState.name} has been suspended.`
+            : `Suspension reverted. ${creatorState.name}'s account is active.`
         );
         setIsSuspendModalOpen(false);
       }
@@ -103,17 +106,27 @@ export function CreatorDetailClient({
     }
   };
 
-  // Archive Account (soft moderation toggle)
+  // Archive / Revert Archive
   const handleConfirmArchive = async () => {
     setIsActionLoading(true);
+    const nextArchived = !isArchived;
+    const nextStatus: CreatorStatus = nextArchived ? "pending" : "active";
     try {
-      const nextStatus: CreatorStatus = creatorState.status === "pending" ? "active" : "pending";
       const res = await updateCreatorAction(creatorState.id, { status: nextStatus });
       if (!res.success) {
-        toast.error("Failed to update archive status", res.error || "Please try again.");
+        toast.error(
+          nextArchived ? "Failed to archive creator" : "Failed to revert archive",
+          res.error || "Please try again."
+        );
       } else {
+        setIsArchived(nextArchived);
         setCreatorState((prev) => ({ ...prev, status: nextStatus }));
-        toast.success("Status Updated", `Creator archive status has been updated.`);
+        toast.success(
+          nextArchived ? "Creator Archived" : "Archive Reverted",
+          nextArchived
+            ? `${creatorState.name} moved to archive.`
+            : `${creatorState.name} restored from archive to active status.`
+        );
         setIsArchiveModalOpen(false);
       }
     } catch {
@@ -167,7 +180,7 @@ export function CreatorDetailClient({
                   size="sm"
                   dot
                 >
-                  {creatorState.status}
+                  {isArchived ? "archived" : creatorState.status}
                 </Badge>
               </div>
               <p className="text-xs md:text-sm text-[#6E6E69] mt-0.5">
@@ -183,15 +196,16 @@ export function CreatorDetailClient({
             <Button
               variant="outline"
               onClick={() => setIsSuspendModalOpen(true)}
-              className={isSuspended ? "text-emerald-700 hover:text-emerald-800" : ""}
+              className={isSuspended ? "text-emerald-700 hover:text-emerald-800 border-emerald-300" : ""}
             >
-              {isSuspended ? "Restore Access" : "Suspend"}
+              {isSuspended ? "Revert Suspension" : "Suspend"}
             </Button>
             <Button
               variant="outline"
               onClick={() => setIsArchiveModalOpen(true)}
+              className={isArchived ? "text-blue-700 hover:text-blue-800 border-blue-300" : ""}
             >
-              Archive
+              {isArchived ? "Revert Archive" : "Archive"}
             </Button>
             <Button
               variant="danger"
@@ -206,10 +220,10 @@ export function CreatorDetailClient({
         <Modal
           isOpen={isSuspendModalOpen}
           onClose={() => !isActionLoading && setIsSuspendModalOpen(false)}
-          title={isSuspended ? "Restore Creator Access" : "Suspend Creator Account"}
+          title={isSuspended ? "Revert Suspension" : "Suspend Creator Account"}
           description={
             isSuspended
-              ? `Are you sure you want to restore full creator platform access for ${creatorState.name}?`
+              ? `Revert suspension for ${creatorState.name}? This will restore their active publishing and platform permissions.`
               : `Suspending this creator will restrict their ability to post artworks, apply for opportunities, or access creator tools.`
           }
           footer={
@@ -228,7 +242,7 @@ export function CreatorDetailClient({
                 onClick={handleConfirmSuspendToggle}
                 isLoading={isActionLoading}
               >
-                {isSuspended ? "Restore Access" : "Suspend Account"}
+                {isSuspended ? "Revert Suspension" : "Suspend Account"}
               </Button>
             </>
           }
@@ -236,7 +250,7 @@ export function CreatorDetailClient({
           <div className="p-3 bg-[#F9F9F8] border border-[#E8E8E3] rounded-lg text-xs text-[#6E6E69] space-y-1">
             <p className="font-semibold text-[#141413]">Account Impact:</p>
             <p>• Profile: {creatorState.name} ({creatorState.email || "No email"})</p>
-            <p>• Action: {isSuspended ? "Reactivate active status" : "Revoke active publishing privileges"}</p>
+            <p>• Target status: {isSuspended ? "active (reverted)" : "suspended"}</p>
           </div>
         </Modal>
 
@@ -280,8 +294,12 @@ export function CreatorDetailClient({
         <Modal
           isOpen={isArchiveModalOpen}
           onClose={() => !isActionLoading && setIsArchiveModalOpen(false)}
-          title="Archive Creator"
-          description={`Archive ${creatorState.name}'s profile to remove it from primary active creator listings while retaining data for administrators.`}
+          title={isArchived ? "Revert Archive Status" : "Archive Creator"}
+          description={
+            isArchived
+              ? `Revert archive status for ${creatorState.name}? This will restore the creator to active public listings.`
+              : `Archive ${creatorState.name}'s profile to remove it from primary active creator listings while retaining data for administrators.`
+          }
           footer={
             <>
               <Button
@@ -298,13 +316,17 @@ export function CreatorDetailClient({
                 onClick={handleConfirmArchive}
                 isLoading={isActionLoading}
               >
-                Archive Creator
+                {isArchived ? "Revert Archive" : "Archive Creator"}
               </Button>
             </>
           }
         >
           <div className="p-3 bg-[#F9F9F8] border border-[#E8E8E3] rounded-lg text-xs text-[#6E6E69]">
-            <p>Archiving maintains all records, commission histories, and past inquiries in the system.</p>
+            <p>
+              {isArchived
+                ? "Restoring from archive makes the creator visible in main directory searches again."
+                : "Archiving maintains all records, commission histories, and past inquiries in the system."}
+            </p>
           </div>
         </Modal>
 

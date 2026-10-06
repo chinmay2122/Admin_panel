@@ -12,6 +12,7 @@ import {
   EyeOff,
   Trash2,
   UserX,
+  UserCheck,
   ExternalLink,
   Clock,
   AlertTriangle,
@@ -40,8 +41,10 @@ import {
   dismissReportAction,
   resolveReportAction,
   hideArtworkModerationAction,
+  unhideArtworkModerationAction,
   removeArtworkModerationAction,
   suspendUserModerationAction,
+  revertSuspendUserModerationAction,
 } from "@/app/admin/actions";
 
 
@@ -334,6 +337,74 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
     }
   };
 
+  // REVERT HIDE (UNHIDE)
+  const handleConfirmUnhide = async (target: Report) => {
+    setIsActionLoading(true);
+    const previous = [...reports];
+    const updated = reports.map((r) =>
+      r.id === target.id
+        ? { ...r, moderationAction: "artwork_restored" as any, artworkStatus: "published" as const }
+        : r
+    );
+    setReports(updated);
+    if (selectedReport?.id === target.id) {
+      setSelectedReport({
+        ...selectedReport,
+        moderationAction: "artwork_restored",
+        artworkStatus: "published",
+      });
+    }
+
+    try {
+      const res = await unhideArtworkModerationAction(target.id, target.artworkId);
+      if (!res.success) {
+        setReports(previous);
+        toast.error("Failed to revert hide", res.error || "Please try again.");
+      } else {
+        toast.success("Visibility Reverted", `"${target.artworkTitle}" has been unhidden and restored.`);
+      }
+    } catch {
+      setReports(previous);
+      toast.error("Network error", "Could not unhide artwork.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  // REVERT SUSPENSION
+  const handleConfirmRevertSuspend = async (target: Report) => {
+    if (!target.artworkOwnerId) return;
+    setIsActionLoading(true);
+    const previous = [...reports];
+    const updated = reports.map((r) =>
+      r.id === target.id
+        ? { ...r, moderationAction: "user_reinstated" as any }
+        : r
+    );
+    setReports(updated);
+    if (selectedReport?.id === target.id) {
+      setSelectedReport({
+        ...selectedReport,
+        moderationAction: "user_reinstated",
+      });
+    }
+
+    try {
+      const res = await revertSuspendUserModerationAction(target.id, target.artworkOwnerId);
+      if (!res.success) {
+        setReports(previous);
+        toast.error("Failed to revert suspension", res.error || "Please try again.");
+      } else {
+        toast.success("Suspension Reverted", `User ${target.ownerName}'s account has been restored to active.`);
+      }
+    } catch {
+      setReports(previous);
+      toast.error("Network error", "Could not revert user suspension.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
   // 5. MARK RESOLVED
   const handleResolveDirect = async (rep: Report) => {
     setIsActionLoading(true);
@@ -597,17 +668,31 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                                   <span>Mark Resolved</span>
                                 </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveDropdownId(null);
-                                    setHideTarget(rep);
-                                  }}
-                                  className="w-full px-3.5 py-2 text-xs text-[#141413] hover:bg-neutral-100 flex items-center gap-2 cursor-pointer transition-colors"
-                                >
-                                  <EyeOff className="w-3.5 h-3.5 text-[#6E6E69]" />
-                                  <span>Hide Content</span>
-                                </button>
+                                {rep.moderationAction === "artwork_hidden" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveDropdownId(null);
+                                      handleConfirmUnhide(rep);
+                                    }}
+                                    className="w-full px-3.5 py-2 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer transition-colors"
+                                  >
+                                    <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Revert Hide (Unhide)</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveDropdownId(null);
+                                      setHideTarget(rep);
+                                    }}
+                                    className="w-full px-3.5 py-2 text-xs text-[#141413] hover:bg-neutral-100 flex items-center gap-2 cursor-pointer transition-colors"
+                                  >
+                                    <EyeOff className="w-3.5 h-3.5 text-[#6E6E69]" />
+                                    <span>Hide Content</span>
+                                  </button>
+                                )}
 
                                 <button
                                   type="button"
@@ -637,17 +722,31 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                               <span>Remove Artwork</span>
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveDropdownId(null);
-                                setSuspendTarget(rep);
-                              }}
-                              className="w-full px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer transition-colors"
-                            >
-                              <UserX className="w-3.5 h-3.5 text-red-600" />
-                              <span>Suspend User</span>
-                            </button>
+                            {rep.moderationAction === "user_suspended" ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveDropdownId(null);
+                                  handleConfirmRevertSuspend(rep);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer transition-colors"
+                              >
+                                <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Revert Suspension</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveDropdownId(null);
+                                  setSuspendTarget(rep);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer transition-colors"
+                              >
+                                <UserX className="w-3.5 h-3.5 text-red-600" />
+                                <span>Suspend User</span>
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -697,16 +796,41 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                 Dismiss
               </Button>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setHideTarget(selectedReport);
-                    setIsDrawerOpen(false);
-                  }}
-                >
-                  Hide Content
-                </Button>
+                {selectedReport.moderationAction === "artwork_hidden" ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                    onClick={() => {
+                      handleConfirmUnhide(selectedReport);
+                    }}
+                  >
+                    Revert Hide (Unhide)
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setHideTarget(selectedReport);
+                      setIsDrawerOpen(false);
+                    }}
+                  >
+                    Hide Content
+                  </Button>
+                )}
+                {selectedReport.moderationAction === "user_suspended" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                    onClick={() => {
+                      handleConfirmRevertSuspend(selectedReport);
+                    }}
+                  >
+                    Revert Suspension
+                  </Button>
+                )}
                 <Button
                   variant="danger"
                   size="sm"

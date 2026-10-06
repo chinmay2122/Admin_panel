@@ -486,8 +486,8 @@ export function ArtworksClient({
         toast.error("Failed to update visibility", res.error || "Please try again.");
       } else {
         toast.success(
-          nextStatus === "draft" ? "Artwork hidden" : "Artwork published",
-          `"${art.title}" is now ${nextStatus === "draft" ? "hidden (draft)" : "published"}.`
+          nextStatus === "draft" ? "Artwork hidden" : "Visibility reverted",
+          `"${art.title}" is now ${nextStatus === "draft" ? "hidden (draft)" : "visible (reverted)"}.`
         );
       }
     } catch {
@@ -782,15 +782,19 @@ export function ArtworksClient({
               </Button>
 
               <Button
-                variant="outline"
+                variant={viewingArtwork.status === "draft" || viewingArtwork.status === "rejected" ? "outline" : "outline"}
                 size="sm"
-                className="inline-flex items-center justify-center gap-2"
+                className={`inline-flex items-center justify-center gap-2 ${
+                  viewingArtwork.status === "draft" || viewingArtwork.status === "rejected"
+                    ? "text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                    : ""
+                }`}
                 onClick={() => handleToggleHide(viewingArtwork)}
               >
                 {viewingArtwork.status === "draft" || viewingArtwork.status === "rejected" ? (
                   <>
-                    <Eye className="w-4 h-4" />
-                    Show
+                    <Eye className="w-4 h-4 text-emerald-600" />
+                    <span>Revert (Unhide)</span>
                   </>
                 ) : (
                   <>
@@ -1287,9 +1291,13 @@ export function ArtworksClient({
                         <button
                           type="button"
                           onClick={() => handleToggleHide(art)}
-                          className="px-3.5 py-1 rounded-full border border-[#D5D5D0] text-xs font-normal text-[#141413] bg-white hover:bg-[#F5F5F3] transition-colors cursor-pointer select-none"
+                          className={`px-3.5 py-1 rounded-full border text-xs font-normal transition-colors cursor-pointer select-none ${
+                            art.status === "published"
+                              ? "border-[#D5D5D0] text-[#141413] bg-white hover:bg-[#F5F5F3]"
+                              : "border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-medium"
+                          }`}
                         >
-                          {art.status === "published" ? "Hide" : "Show"}
+                          {art.status === "published" ? "Hide" : "Revert (Unhide)"}
                         </button>
                         <button
                           type="button"

@@ -67,13 +67,35 @@ export function CorOpportunitiesClient({
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newCompany, setNewCompany] = useState("");
-  const [newLocation, setNewLocation] = useState("");
+  const [newCountry, setNewCountry] = useState("");
+  const [newCity, setNewCity] = useState("");
   const [newWorkplace, setNewWorkplace] = useState<CorOpportunityWorkplaceType>("Remote");
   const [newSalary, setNewSalary] = useState("");
   const [newSkills, setNewSkills] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newJobUrl, setNewJobUrl] = useState("");
   const [newRecruiter, setNewRecruiter] = useState("");
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Curated world countries list
+  const COUNTRIES = [
+    "Afghanistan","Albania","Algeria","Argentina","Armenia","Australia","Austria","Azerbaijan",
+    "Bahrain","Bangladesh","Belarus","Belgium","Bolivia","Bosnia and Herzegovina","Brazil","Bulgaria",
+    "Cambodia","Cameroon","Canada","Chile","China","Colombia","Croatia","Cyprus","Czech Republic",
+    "Denmark","Dominican Republic","Ecuador","Egypt","Estonia","Ethiopia",
+    "Finland","France","Georgia","Germany","Ghana","Greece","Guatemala",
+    "Hong Kong","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy",
+    "Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kosovo","Kuwait",
+    "Latvia","Lebanon","Libya","Lithuania","Luxembourg",
+    "Malaysia","Malta","Mexico","Moldova","Morocco","Myanmar",
+    "Nepal","Netherlands","New Zealand","Nigeria","North Macedonia","Norway",
+    "Oman","Pakistan","Palestine","Panama","Peru","Philippines","Poland","Portugal",
+    "Qatar","Romania","Russia","Rwanda",
+    "Saudi Arabia","Senegal","Serbia","Singapore","Slovakia","Slovenia","South Africa","South Korea","Spain","Sri Lanka","Sudan","Sweden","Switzerland",
+    "Taiwan","Tanzania","Thailand","Tunisia","Turkey",
+    "Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay",
+    "Venezuela","Vietnam","Yemen","Zimbabwe"
+  ];
 
   // Candidate Match Drawer
   const [selectedOpportunityForMatching, setSelectedOpportunityForMatching] = useState<CorOpportunity | null>(null);
@@ -118,10 +140,20 @@ export function CorOpportunitiesClient({
 
   const handleCreateOpportunity = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newCompany.trim() || !newLocation.trim()) {
-      toast.error("Required Fields", "Title, Company, and Location are mandatory.");
+    // Validate required fields
+    const errors: Record<string, string> = {};
+    if (!newTitle.trim()) errors.title = "Title is required.";
+    if (!newCompany.trim()) errors.company = "Company is required.";
+    if (!newCountry) errors.country = "Country is required.";
+    if (newJobUrl && !/^https?:\/\//i.test(newJobUrl)) errors.jobUrl = "Enter a valid URL starting with https://";
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
       return;
     }
+    setFormErrors({});
+
+    // Build combined location string from dropdowns
+    const combinedLocation = newCity ? `${newCity}, ${newCountry}` : newCountry;
 
     setIsCreating(true);
     try {
@@ -133,7 +165,7 @@ export function CorOpportunitiesClient({
       const res = await createCorOpportunityAction({
         title: newTitle,
         company: newCompany,
-        location: newLocation,
+        location: combinedLocation,
         workplaceType: newWorkplace,
         salary: newSalary,
         requiredSkills: skillsArray,
@@ -153,12 +185,14 @@ export function CorOpportunitiesClient({
         // Reset form
         setNewTitle("");
         setNewCompany("");
-        setNewLocation("");
+        setNewCountry("");
+        setNewCity("");
         setNewSalary("");
         setNewSkills("");
         setNewDesc("");
         setNewJobUrl("");
         setNewRecruiter("");
+        setFormErrors({});
       }
     } catch {
       toast.error("Network Error", "Could not create opportunity.");
@@ -507,155 +541,193 @@ export function CorOpportunitiesClient({
         )}
       </Drawer>
 
-      {/* Add Opportunity Modal */}
+      {/* Add Opportunity Modal — Redesigned */}
       <Modal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
+        onClose={() => { setIsAddModalOpen(false); setFormErrors({}); }}
         title="Add Job / Opportunity"
         description="Add a new verified career opportunity or residency to the COR portfolio."
         maxWidth="lg"
       >
-        <form onSubmit={handleCreateOpportunity} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E6E69] mb-1">
-                Job / Opportunity Title *
-              </label>
-              <input
-                type="text"
-                required
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="e.g. Spatial Media Resident"
-                className="w-full text-sm bg-white border border-[#E8E8E3] rounded-lg px-3 py-2 text-[#141413] focus:outline-none focus:ring-1 focus:ring-[#B8532F]"
-              />
-            </div>
+        <form onSubmit={handleCreateOpportunity} noValidate>
+          {/* ── Section 1: Opportunity Details ── */}
+          <div className="pt-1 pb-5 border-b border-[#E8E8E3]">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8A8A85] mb-3">Opportunity Details</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+              {/* Title */}
+              <div>
+                <label className="block text-xs font-medium text-[#3D3D3A] mb-1">
+                  Title <span className="text-[#B8532F]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => { setNewTitle(e.target.value); setFormErrors((p) => ({ ...p, title: "" })); }}
+                  placeholder="e.g. Spatial Experience Designer"
+                  className={`w-full text-sm bg-white border rounded-[8px] px-3 h-[42px] text-[#141413] placeholder-[#AEAEA8] focus:outline-none focus:ring-1 transition-colors ${
+                    formErrors.title ? "border-[#C0392B] focus:ring-[#C0392B]" : "border-[#DEDED8] focus:ring-[#141413]"
+                  }`}
+                />
+                {formErrors.title && <p className="mt-1 text-[11px] text-[#C0392B]">{formErrors.title}</p>}
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E6E69] mb-1">
-                Company / Organization *
-              </label>
-              <input
-                type="text"
-                required
-                value={newCompany}
-                onChange={(e) => setNewCompany(e.target.value)}
-                placeholder="e.g. Atelier Kōra"
-                className="w-full text-sm bg-white border border-[#E8E8E3] rounded-lg px-3 py-2 text-[#141413] focus:outline-none focus:ring-1 focus:ring-[#B8532F]"
-              />
+              {/* Company */}
+              <div>
+                <label className="block text-xs font-medium text-[#3D3D3A] mb-1">
+                  Company / Organization <span className="text-[#B8532F]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newCompany}
+                  onChange={(e) => { setNewCompany(e.target.value); setFormErrors((p) => ({ ...p, company: "" })); }}
+                  placeholder="e.g. Atelier Kōra"
+                  className={`w-full text-sm bg-white border rounded-[8px] px-3 h-[42px] text-[#141413] placeholder-[#AEAEA8] focus:outline-none focus:ring-1 transition-colors ${
+                    formErrors.company ? "border-[#C0392B] focus:ring-[#C0392B]" : "border-[#DEDED8] focus:ring-[#141413]"
+                  }`}
+                />
+                {formErrors.company && <p className="mt-1 text-[11px] text-[#C0392B]">{formErrors.company}</p>}
+              </div>
+
+              {/* Workplace Type */}
+              <div>
+                <label className="block text-xs font-medium text-[#3D3D3A] mb-1">Workplace Type</label>
+                <select
+                  value={newWorkplace}
+                  onChange={(e) => setNewWorkplace(e.target.value as CorOpportunityWorkplaceType)}
+                  className="w-full text-sm bg-white border border-[#DEDED8] rounded-[8px] px-3 h-[42px] text-[#141413] focus:outline-none focus:ring-1 focus:ring-[#141413] transition-colors appearance-none cursor-pointer"
+                >
+                  <option value="Remote">Remote</option>
+                  <option value="Hybrid">Hybrid</option>
+                  <option value="Onsite">On-site</option>
+                </select>
+              </div>
+
+              {/* Salary */}
+              <div>
+                <label className="block text-xs font-medium text-[#3D3D3A] mb-1">Salary / Budget</label>
+                <input
+                  type="text"
+                  value={newSalary}
+                  onChange={(e) => setNewSalary(e.target.value)}
+                  placeholder="e.g. $90,000 – $115,000 USD"
+                  className="w-full text-sm bg-white border border-[#DEDED8] rounded-[8px] px-3 h-[42px] text-[#141413] placeholder-[#AEAEA8] focus:outline-none focus:ring-1 focus:ring-[#141413] transition-colors"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E6E69] mb-1">
-                Location *
-              </label>
-              <input
-                type="text"
-                required
-                value={newLocation}
-                onChange={(e) => setNewLocation(e.target.value)}
-                placeholder="e.g. Kyoto / Remote"
-                className="w-full text-sm bg-white border border-[#E8E8E3] rounded-lg px-3 py-2 text-[#141413] focus:outline-none focus:ring-1 focus:ring-[#B8532F]"
-              />
-            </div>
+          {/* ── Section 2: Location ── */}
+          <div className="pt-4 pb-5 border-b border-[#E8E8E3]">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8A8A85] mb-3">Location</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+              {/* Country */}
+              <div>
+                <label className="block text-xs font-medium text-[#3D3D3A] mb-1">
+                  Country <span className="text-[#B8532F]">*</span>
+                </label>
+                <select
+                  value={newCountry}
+                  onChange={(e) => { setNewCountry(e.target.value); setNewCity(""); setFormErrors((p) => ({ ...p, country: "" })); }}
+                  className={`w-full text-sm bg-white border rounded-[8px] px-3 h-[42px] text-[#141413] focus:outline-none focus:ring-1 transition-colors appearance-none cursor-pointer ${
+                    formErrors.country ? "border-[#C0392B] focus:ring-[#C0392B]" : "border-[#DEDED8] focus:ring-[#141413]"
+                  } ${!newCountry ? "text-[#AEAEA8]" : "text-[#141413]"}`}
+                >
+                  <option value="" disabled>Select country…</option>
+                  {COUNTRIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                {formErrors.country && <p className="mt-1 text-[11px] text-[#C0392B]">{formErrors.country}</p>}
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E6E69] mb-1">
-                Workplace Type
-              </label>
-              <select
-                value={newWorkplace}
-                onChange={(e) => setNewWorkplace(e.target.value as CorOpportunityWorkplaceType)}
-                className="w-full text-sm bg-white border border-[#E8E8E3] rounded-lg px-3 py-2 text-[#141413] focus:outline-none focus:ring-1 focus:ring-[#B8532F]"
+              {/* City */}
+              <div>
+                <label className="block text-xs font-medium text-[#3D3D3A] mb-1">City <span className="text-[#8A8A85] font-normal">(optional)</span></label>
+                <input
+                  type="text"
+                  value={newCity}
+                  onChange={(e) => setNewCity(e.target.value)}
+                  placeholder="e.g. Kyoto"
+                  disabled={!newCountry}
+                  className="w-full text-sm bg-white border border-[#DEDED8] rounded-[8px] px-3 h-[42px] text-[#141413] placeholder-[#AEAEA8] focus:outline-none focus:ring-1 focus:ring-[#141413] transition-colors disabled:bg-[#F7F7F4] disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Section 3: Requirements ── */}
+          <div className="pt-4 pb-5 border-b border-[#E8E8E3]">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8A8A85] mb-3">Requirements</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-[#3D3D3A] mb-1">Required Skills <span className="text-[#8A8A85] font-normal">(comma-separated)</span></label>
+                <input
+                  type="text"
+                  value={newSkills}
+                  onChange={(e) => setNewSkills(e.target.value)}
+                  placeholder="e.g. Spatial Media, Interactive Lighting, CAD"
+                  className="w-full text-sm bg-white border border-[#DEDED8] rounded-[8px] px-3 h-[42px] text-[#141413] placeholder-[#AEAEA8] focus:outline-none focus:ring-1 focus:ring-[#141413] transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#3D3D3A] mb-1">Description & Scope</label>
+                <textarea
+                  rows={3}
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
+                  placeholder="Describe the role, residency, or commission scope…"
+                  className="w-full text-sm bg-white border border-[#DEDED8] rounded-[8px] px-3 py-2.5 text-[#141413] placeholder-[#AEAEA8] focus:outline-none focus:ring-1 focus:ring-[#141413] transition-colors resize-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Section 4: Listing & Contact ── */}
+          <div className="pt-4 pb-1">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8A8A85] mb-3">Listing & Contact</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+              <div>
+                <label className="block text-xs font-medium text-[#3D3D3A] mb-1">Listing URL</label>
+                <input
+                  type="text"
+                  value={newJobUrl}
+                  onChange={(e) => { setNewJobUrl(e.target.value); setFormErrors((p) => ({ ...p, jobUrl: "" })); }}
+                  placeholder="https://company.com/listing"
+                  className={`w-full text-sm bg-white border rounded-[8px] px-3 h-[42px] text-[#141413] placeholder-[#AEAEA8] focus:outline-none focus:ring-1 transition-colors ${
+                    formErrors.jobUrl ? "border-[#C0392B] focus:ring-[#C0392B]" : "border-[#DEDED8] focus:ring-[#141413]"
+                  }`}
+                />
+                {formErrors.jobUrl && <p className="mt-1 text-[11px] text-[#C0392B]">{formErrors.jobUrl}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#3D3D3A] mb-1">Recruiter Contact</label>
+                <input
+                  type="text"
+                  value={newRecruiter}
+                  onChange={(e) => setNewRecruiter(e.target.value)}
+                  placeholder="Name, email, or phone"
+                  className="w-full text-sm bg-white border border-[#DEDED8] rounded-[8px] px-3 h-[42px] text-[#141413] placeholder-[#AEAEA8] focus:outline-none focus:ring-1 focus:ring-[#141413] transition-colors"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Footer ── */}
+          <div className="flex items-center justify-between pt-5 mt-1 border-t border-[#E8E8E3]">
+            <p className="text-[11px] text-[#8A8A85]"><span className="text-[#B8532F]">*</span> Required fields</p>
+            <div className="flex items-center gap-2.5">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => { setIsAddModalOpen(false); setFormErrors({}); }}
+                disabled={isCreating}
               >
-                <option value="Remote">Remote</option>
-                <option value="Hybrid">Hybrid</option>
-                <option value="Onsite">Onsite</option>
-              </select>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" isLoading={isCreating}>
+                Create Opportunity
+              </Button>
             </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E6E69] mb-1">
-                Salary / Budget
-              </label>
-              <input
-                type="text"
-                value={newSalary}
-                onChange={(e) => setNewSalary(e.target.value)}
-                placeholder="e.g. $90,000 – $115,000 USD"
-                className="w-full text-sm bg-white border border-[#E8E8E3] rounded-lg px-3 py-2 text-[#141413] focus:outline-none focus:ring-1 focus:ring-[#B8532F]"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E6E69] mb-1">
-              Required Skills (comma separated)
-            </label>
-            <input
-              type="text"
-              value={newSkills}
-              onChange={(e) => setNewSkills(e.target.value)}
-              placeholder="e.g. Spatial Media, Interactive Lighting, CAD, Parametric Design"
-              className="w-full text-sm bg-white border border-[#E8E8E3] rounded-lg px-3 py-2 text-[#141413] focus:outline-none focus:ring-1 focus:ring-[#B8532F]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E6E69] mb-1">
-              Description & Requirements
-            </label>
-            <textarea
-              rows={3}
-              value={newDesc}
-              onChange={(e) => setNewDesc(e.target.value)}
-              placeholder="Detailed description of the residency or commission scope..."
-              className="w-full text-sm bg-white border border-[#E8E8E3] rounded-lg px-3 py-2 text-[#141413] focus:outline-none focus:ring-1 focus:ring-[#B8532F]"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E6E69] mb-1">
-                Job / Listing URL
-              </label>
-              <input
-                type="url"
-                value={newJobUrl}
-                onChange={(e) => setNewJobUrl(e.target.value)}
-                placeholder="https://company.com/listing"
-                className="w-full text-sm bg-white border border-[#E8E8E3] rounded-lg px-3 py-2 text-[#141413] focus:outline-none focus:ring-1 focus:ring-[#B8532F]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#6E6E69] mb-1">
-                Recruiter Contact
-              </label>
-              <input
-                type="text"
-                value={newRecruiter}
-                onChange={(e) => setNewRecruiter(e.target.value)}
-                placeholder="Name / Email / Phone"
-                className="w-full text-sm bg-white border border-[#E8E8E3] rounded-lg px-3 py-2 text-[#141413] focus:outline-none focus:ring-1 focus:ring-[#B8532F]"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E8E8E3]">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setIsAddModalOpen(false)}
-              disabled={isCreating}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" isLoading={isCreating}>
-              Create Opportunity
-            </Button>
           </div>
         </form>
       </Modal>

@@ -237,8 +237,10 @@ export function CollectorsClient({
         toast.error("Failed to update status", res.error || "Please try again.");
       } else {
         toast.success(
-          nextStatus === "suspended" ? "Collector suspended" : "Collector reactivated",
-          `${CollectorName} is now ${nextStatus}.`
+          nextStatus === "suspended" ? "Collector suspended" : "Suspension reverted",
+          nextStatus === "suspended"
+            ? `${CollectorName} has been suspended.`
+            : `Suspension reverted. ${CollectorName} is active.`
         );
       }
     } catch {
@@ -489,7 +491,7 @@ export function CollectorsClient({
                 >
                   {selectedCollector.status === "active"
                     ? "Suspend Collector"
-                    : "Reactivate Collector"}
+                    : "Revert Suspension"}
                 </Button>
               )}
 

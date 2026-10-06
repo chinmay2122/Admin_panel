@@ -210,8 +210,10 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
         toast.error("Failed to update status", res.error || "Please try again.");
       } else {
         toast.success(
-          nextStatus === "suspended" ? "User suspended" : "User reactivated",
-          `${selectedUser.name} is now ${nextStatus}.`
+          nextStatus === "suspended" ? "User suspended" : "Suspension reverted",
+          nextStatus === "suspended"
+            ? `${selectedUser.name} has been suspended.`
+            : `Suspension reverted. ${selectedUser.name} is active.`
         );
       }
     } catch {
@@ -536,7 +538,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
               >
                 {selectedUser.status === "active"
                   ? "Suspend User"
-                  : "Reactivate User"}
+                  : "Revert Suspension"}
               </Button>
             </div>
           )

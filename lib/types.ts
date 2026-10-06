@@ -441,7 +441,15 @@ export interface ModerationAuditLog {
   artworkId?: string;
   targetUserId?: string;
   adminId?: string;
-  action: "report_created" | "report_dismissed" | "report_resolved" | "artwork_hidden" | "artwork_removed" | "user_suspended";
+  action:
+    | "report_created"
+    | "report_dismissed"
+    | "report_resolved"
+    | "artwork_hidden"
+    | "artwork_removed"
+    | "user_suspended"
+    | "artwork_restored"
+    | "user_reinstated";
   note?: string;
   createdAt: string;
 }

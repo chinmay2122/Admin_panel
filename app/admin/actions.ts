@@ -977,6 +977,120 @@ export async function suspendUserModerationAction(
   }
 }
 
+/**
+ * Revert Hide Artwork: Sets status back to published and logs restoration
+ */
+export async function unhideArtworkModerationAction(
+  reportId: string,
+  artworkId: string,
+  note?: string
+): Promise<{ success: boolean; report?: Report; error?: string }> {
+  try {
+    const session = await requireAdminSession("artwork:hide");
+
+    if (!isValidId(reportId) || !isValidId(artworkId)) {
+      return { success: false, error: "Invalid report or artwork ID format." };
+    }
+
+    const currentReport = await reportsRepo.getById(reportId);
+    if (!currentReport) {
+      return { success: false, error: "Report not found." };
+    }
+
+    const targetArtwork = await artworksRepo.getById(artworkId);
+    if (!targetArtwork) {
+      return { success: false, error: "Target artwork does not exist." };
+    }
+
+    // Restore artwork: set status to published
+    const updatedArtwork = await artworksRepo.update(artworkId, {
+      status: "published",
+    });
+
+    if (!updatedArtwork) {
+      return { success: false, error: "Failed to restore artwork status to published." };
+    }
+
+    const cleanNote = (note || "Artwork unhidden and restored to public catalog.").trim().slice(0, 1000);
+
+    const report = await reportsRepo.updateStatus(
+      reportId,
+      "resolved",
+      session.id,
+      "artwork_restored",
+      cleanNote
+    );
+
+    await reportsRepo.logAudit({
+      reportId,
+      artworkId,
+      targetUserId: targetArtwork.creatorId || report?.artworkOwnerId,
+      adminId: session.id,
+      action: "artwork_restored",
+      note: cleanNote,
+    });
+
+    return { success: true, report: report || undefined };
+  } catch (err: any) {
+    console.error("unhideArtworkModerationAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to restore artwork.") };
+  }
+}
+
+/**
+ * Revert User Suspension: Restores account status to active
+ */
+export async function revertSuspendUserModerationAction(
+  reportId: string,
+  userId: string,
+  note?: string
+): Promise<{ success: boolean; report?: Report; error?: string }> {
+  try {
+    const session = await requireAdminSession("user:suspend");
+
+    if (!isValidId(reportId) || !isValidId(userId)) {
+      return { success: false, error: "Invalid report or user ID format." };
+    }
+
+    const currentReport = await reportsRepo.getById(reportId);
+    if (!currentReport) {
+      return { success: false, error: "Report not found." };
+    }
+
+    // Revert suspension: set status to active
+    const updatedUser = await usersRepo.update(userId, {
+      status: "active",
+    });
+
+    if (!updatedUser) {
+      return { success: false, error: "Failed to revert user suspension." };
+    }
+
+    const cleanNote = (note || "User suspension reverted to active.").trim().slice(0, 1000);
+
+    const report = await reportsRepo.updateStatus(
+      reportId,
+      "resolved",
+      session.id,
+      "user_reinstated",
+      cleanNote
+    );
+
+    await reportsRepo.logAudit({
+      reportId,
+      targetUserId: userId,
+      adminId: session.id,
+      action: "user_reinstated",
+      note: cleanNote,
+    });
+
+    return { success: true, report: report || undefined };
+  } catch (err: any) {
+    console.error("revertSuspendUserModerationAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to revert user suspension.") };
+  }
+}
+
 // ==============================================================================
 // Studio Settings Actions (RBAC + Rate Limiting + Input Validation + Audit)
 // ==============================================================================

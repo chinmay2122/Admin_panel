@@ -45,6 +45,7 @@ export function CollectorDetailClient({
   const [activeTab, setActiveTab] = useState<"overview" | "collection">("overview");
 
   const [collectorState, setCollectorState] = useState<Collector>(collector);
+  const [isArchived, setIsArchived] = useState(collector.status === "pending");
   const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
@@ -52,7 +53,7 @@ export function CollectorDetailClient({
 
   const isSuspended = collectorState.status === "suspended";
 
-  // Suspend / Restore Access
+  // Suspend / Revert Suspension
   const handleConfirmSuspendToggle = async () => {
     const nextStatus: CollectorStatus = isSuspended ? "active" : "suspended";
     setIsActionLoading(true);
@@ -60,14 +61,16 @@ export function CollectorDetailClient({
       const res = await updateCollectorAction(collectorState.id, { status: nextStatus });
       if (!res.success) {
         toast.error(
-          isSuspended ? "Failed to restore access" : "Failed to suspend collector",
+          isSuspended ? "Failed to revert suspension" : "Failed to suspend collector",
           res.error || "Please try again."
         );
       } else {
         setCollectorState((prev) => ({ ...prev, status: nextStatus }));
         toast.success(
-          nextStatus === "suspended" ? "Collector Suspended" : "Access Restored",
-          `${collectorState.name} is now ${nextStatus}.`
+          nextStatus === "suspended" ? "Collector Suspended" : "Suspension Reverted",
+          nextStatus === "suspended"
+            ? `${collectorState.name} has been suspended.`
+            : `Suspension reverted. ${collectorState.name}'s account is active.`
         );
         setIsSuspendModalOpen(false);
       }
@@ -97,17 +100,27 @@ export function CollectorDetailClient({
     }
   };
 
-  // Archive Account
+  // Archive / Revert Archive
   const handleConfirmArchive = async () => {
     setIsActionLoading(true);
+    const nextArchived = !isArchived;
+    const nextStatus: CollectorStatus = nextArchived ? "pending" : "active";
     try {
-      const nextStatus: CollectorStatus = collectorState.status === "pending" ? "active" : "pending";
       const res = await updateCollectorAction(collectorState.id, { status: nextStatus });
       if (!res.success) {
-        toast.error("Failed to update archive status", res.error || "Please try again.");
+        toast.error(
+          nextArchived ? "Failed to archive collector" : "Failed to revert archive",
+          res.error || "Please try again."
+        );
       } else {
+        setIsArchived(nextArchived);
         setCollectorState((prev) => ({ ...prev, status: nextStatus }));
-        toast.success("Status Updated", `Collector archive status has been updated.`);
+        toast.success(
+          nextArchived ? "Collector Archived" : "Archive Reverted",
+          nextArchived
+            ? `${collectorState.name} moved to archive.`
+            : `${collectorState.name} restored from archive to active status.`
+        );
         setIsArchiveModalOpen(false);
       }
     } catch {
@@ -179,13 +192,14 @@ export function CollectorDetailClient({
               onClick={() => setIsSuspendModalOpen(true)}
               className={isSuspended ? "text-emerald-700 hover:text-emerald-800" : ""}
             >
-              {isSuspended ? "Restore Access" : "Suspend"}
+              {isSuspended ? "Revert Suspension" : "Suspend"}
             </Button>
             <Button
               variant="outline"
               onClick={() => setIsArchiveModalOpen(true)}
+              className={isArchived ? "text-amber-700 hover:text-amber-800" : ""}
             >
-              Archive
+              {isArchived ? "Revert Archive" : "Archive"}
             </Button>
             <Button
               variant="danger"
@@ -196,14 +210,14 @@ export function CollectorDetailClient({
           </div>
         </div>
 
-        {/* Confirmation Modal: Suspend / Restore */}
+        {/* Confirmation Modal: Suspend / Revert Suspension */}
         <Modal
           isOpen={isSuspendModalOpen}
           onClose={() => !isActionLoading && setIsSuspendModalOpen(false)}
-          title={isSuspended ? "Restore Collector Access" : "Suspend Collector Account"}
+          title={isSuspended ? "Revert Suspension" : "Suspend Collector Account"}
           description={
             isSuspended
-              ? `Are you sure you want to restore full platform access for ${collectorState.name}?`
+              ? `Revert suspension for ${collectorState.name}? This will restore their active inquiry and platform permissions.`
               : `Suspending this collector will prevent them from inquiring about artworks, communicating with creators, or accessing platform features.`
           }
           footer={
@@ -222,7 +236,7 @@ export function CollectorDetailClient({
                 onClick={handleConfirmSuspendToggle}
                 isLoading={isActionLoading}
               >
-                {isSuspended ? "Restore Access" : "Suspend Collector"}
+                {isSuspended ? "Revert Suspension" : "Suspend Collector"}
               </Button>
             </>
           }
@@ -230,7 +244,7 @@ export function CollectorDetailClient({
           <div className="p-3 bg-[#F9F9F8] border border-[#E8E8E3] rounded-lg text-xs text-[#6E6E69] space-y-1">
             <p className="font-semibold text-[#141413]">Collector Profile:</p>
             <p>• User: {collectorState.name} ({collectorState.email || "No email"})</p>
-            <p>• Status change: {isSuspended ? "active" : "suspended"}</p>
+            <p>• Status change: {isSuspended ? "active (reverted)" : "suspended"}</p>
           </div>
         </Modal>
 
@@ -270,12 +284,16 @@ export function CollectorDetailClient({
           </div>
         </Modal>
 
-        {/* Confirmation Modal: Archive */}
+        {/* Confirmation Modal: Archive / Revert Archive */}
         <Modal
           isOpen={isArchiveModalOpen}
           onClose={() => !isActionLoading && setIsArchiveModalOpen(false)}
-          title="Archive Collector"
-          description={`Archive ${collectorState.name}'s profile to remove it from active listings while preserving interaction history.`}
+          title={isArchived ? "Revert Archive Status" : "Archive Collector"}
+          description={
+            isArchived
+              ? `Revert archive status for ${collectorState.name}? This will restore the collector to active status.`
+              : `Archive ${collectorState.name}'s profile to remove it from active listings while preserving interaction history.`
+          }
           footer={
             <>
               <Button
@@ -292,7 +310,7 @@ export function CollectorDetailClient({
                 onClick={handleConfirmArchive}
                 isLoading={isActionLoading}
               >
-                Archive Collector
+                {isArchived ? "Revert Archive" : "Archive Collector"}
               </Button>
             </>
           }

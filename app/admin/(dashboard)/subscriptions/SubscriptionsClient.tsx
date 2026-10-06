@@ -117,19 +117,29 @@ export function SubscriptionsClient({ initialSubscribers, stats }: Subscriptions
   }, [filtered, currentPage, pageSize]);
 
   const handleSuspend = async (sub: Subscriber) => {
+    const isCurrentlySuspended = sub.status === "suspended";
+    const nextStatus = isCurrentlySuspended ? "active" : "suspended";
     const previous = [...subscribers];
     const next = subscribers.map((s) =>
-      s.id === sub.id ? { ...s, status: "suspended" as const } : s
+      s.id === sub.id ? { ...s, status: nextStatus as "active" | "suspended" } : s
     );
     setSubscribers(next);
 
     try {
-      const res = await updateUserAction(sub.id, { status: "suspended" });
+      const res = await updateUserAction(sub.id, { status: nextStatus });
       if (!res.success) {
         setSubscribers(previous);
-        toast.error("Failed to suspend user", res.error || "Please try again.");
+        toast.error(
+          isCurrentlySuspended ? "Failed to revert suspension" : "Failed to suspend user",
+          res.error || "Please try again."
+        );
       } else {
-        toast.success("User suspended", `${sub.name}'s account has been suspended.`);
+        toast.success(
+          isCurrentlySuspended ? "Suspension Reverted" : "User Suspended",
+          isCurrentlySuspended
+            ? `${sub.name}'s suspension was reverted to active.`
+            : `${sub.name}'s account has been suspended.`
+        );
       }
     } catch {
       setSubscribers(previous);
@@ -373,10 +383,13 @@ export function SubscriptionsClient({ initialSubscribers, stats }: Subscriptions
                           <button
                             type="button"
                             onClick={() => handleSuspend(sub)}
-                            disabled={sub.status === "suspended"}
-                            className="px-2.5 py-1 text-xs font-medium text-[#6E6E69] border border-[#D5D5CF] rounded-lg hover:bg-[#F5F5F3] hover:text-[#141413] transition-all cursor-pointer whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                            className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer whitespace-nowrap border ${
+                              sub.status === "suspended"
+                                ? "text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                : "text-[#6E6E69] border-[#D5D5CF] hover:bg-[#F5F5F3] hover:text-[#141413]"
+                            }`}
                           >
-                            Suspend
+                            {sub.status === "suspended" ? "Revert Suspension" : "Suspend"}
                           </button>
                           <button
                             type="button"

@@ -242,8 +242,10 @@ export function CreatorsClient({
         toast.error("Failed to update status", res.error || "Please try again.");
       } else {
         toast.success(
-          nextStatus === "suspended" ? "Creator suspended" : "Creator reactivated",
-          `${creatorName} is now ${nextStatus}.`
+          nextStatus === "suspended" ? "Creator suspended" : "Suspension reverted",
+          nextStatus === "suspended"
+            ? `${creatorName} has been suspended.`
+            : `Suspension reverted. ${creatorName} is active.`
         );
       }
     } catch {
@@ -593,7 +595,7 @@ export function CreatorsClient({
                 >
                   {selectedCreator.status === "active"
                     ? "Suspend Creator"
-                    : "Reactivate Creator"}
+                    : "Revert Suspension"}
                 </Button>
               )}
 
