@@ -17,10 +17,12 @@ import {
   applicationsRepo,
   reportsRepo,
   settingsRepo,
+  collectorsRepo,
 } from "@/lib/data";
 import {
   User,
   Creator,
+  Collector,
   Artwork,
   CorMember,
   CorMemberStatus,
@@ -175,6 +177,50 @@ export async function deleteCreatorAction(
   } catch (err: any) {
     console.error("deleteCreatorAction error:", err);
     return { success: false, error: sanitizeClientError(err, "Failed to delete creator.") };
+  }
+}
+
+// ==============================================================================
+// Collector Actions
+// ==============================================================================
+
+export async function updateCollectorAction(
+  id: string,
+  data: Partial<Collector>
+): Promise<{ success: boolean; collector?: Collector; error?: string }> {
+  try {
+    await requireAdminSession("user:manage");
+
+    if (!isValidId(id)) {
+      return { success: false, error: "Invalid collector ID format." };
+    }
+
+    const updated = await collectorsRepo.update(id, data);
+    if (!updated) {
+      return { success: false, error: "Collector not found or update failed." };
+    }
+    return { success: true, collector: updated };
+  } catch (err: any) {
+    console.error("updateCollectorAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to update collector.") };
+  }
+}
+
+export async function deleteCollectorAction(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdminSession("user:manage");
+
+    if (!isValidId(id)) {
+      return { success: false, error: "Invalid collector ID format." };
+    }
+
+    const success = await collectorsRepo.remove(id);
+    return { success };
+  } catch (err: any) {
+    console.error("deleteCollectorAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to delete collector.") };
   }
 }
 

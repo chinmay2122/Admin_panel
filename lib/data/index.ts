@@ -1,5 +1,6 @@
 export * from "./users";
 export * from "./creators";
+export * from "./collectors";
 export * from "./artworks";
 export * from "./cor";
 export * from "./jobs";

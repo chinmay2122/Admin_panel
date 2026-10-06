@@ -34,6 +34,37 @@ export interface Creator {
   createdAt: string;
 }
 
+export interface CreatorFilters {
+  query?: string;
+  discipline?: string;
+  plan?: UserPlan | "all";
+  status?: CreatorStatus | "all";
+}
+
+export type CollectorStatus = "active" | "pending" | "suspended";
+
+export interface Collector {
+  id: string;
+  userId: string;
+  name: string;
+  email?: string;
+  phoneNumber?: string;
+  location?: string;
+  aboutMe?: string;
+  profilePicUrl?: string;
+  preferences?: string;
+  plan: UserPlan;
+  status: CollectorStatus;
+  createdAt: string;
+}
+
+export interface CollectorFilters {
+  query?: string;
+  preferences?: string;
+  plan?: UserPlan | "all";
+  status?: CollectorStatus | "all";
+}
+
 export type ArtworkStatus = "draft" | "pending" | "published" | "rejected";
 
 export interface Artwork {
@@ -299,12 +330,7 @@ export interface UserFilters {
   isCorMember?: boolean;
 }
 
-export interface CreatorFilters {
-  query?: string;
-  discipline?: string;
-  plan?: "free" | "elite" | "pro";
-  status?: CreatorStatus;
-}
+
 
 export interface ArtworkFilters {
   query?: string;

@@ -38,6 +38,7 @@ const navItems: NavItem[] = [
   { name: "Users", href: "/admin/users", icon: Users },
   { name: "Subscriptions", href: "/admin/subscriptions", icon: CreditCard },
   { name: "Creators", href: "/admin/creators", icon: Sparkles },
+  { name: "Collectors", href: "/admin/collectors", icon: Users },
   { name: "Artworks", href: "/admin/artworks", icon: Palette },
   { name: "Reports", href: "/admin/reports", icon: ShieldAlert },
   { name: "COR", href: "/admin/cor", icon: Award },
