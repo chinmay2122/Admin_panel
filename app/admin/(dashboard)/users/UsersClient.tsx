@@ -269,20 +269,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <ExportDropdown
-            data={filteredUsers}
-            filename="ERAS-Users"
-            reportTitle="Platform Users Report"
-            columns={[
-              { header: "Name", key: "name" },
-              { header: "Email", key: "email" },
-              { header: "Role", key: "role" },
-              { header: "Plan", key: (row) => row.plan || "free" },
-              { header: "COR Member", key: (row) => row.isCorMember ? "Yes" : "No" },
-              { header: "Status", key: "status" },
-              { header: "Joined Date", key: (row) => formatDate(row.createdAt) }
-            ]}
-          />
+          <ExportDropdown exportType="users" filters={{ query: searchQuery, role: activeTab === "all" ? undefined : activeTab }} />
           <div className="text-xs text-[#6E6E69] font-medium">
             Total: <span className="text-[#141413]">{users.length} members</span>
           </div>

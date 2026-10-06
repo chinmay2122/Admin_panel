@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   ArrowUpDown,
   ArrowUp,
@@ -172,9 +172,10 @@ export function CreatorsClient({
     );
   };
 
+  const router = useRouter();
+
   const handleRowClick = (creator: Creator) => {
-    setSelectedCreator(creator);
-    setIsDrawerOpen(true);
+    router.push(`/admin/creators/${creator.id}`);
   };
 
   // Drawer action: Approve pending creator (optimistic)
@@ -367,19 +368,7 @@ export function CreatorsClient({
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-          <ExportDropdown
-            data={filteredCreators}
-            filename="ERAS-Creators"
-            reportTitle="Platform Creators Report"
-            columns={[
-              { header: "Creator Name", key: "name" },
-              { header: "ID", key: "id" },
-              { header: "Discipline", key: "discipline" },
-              { header: "Plan", key: (row) => row.plan || "free" },
-              { header: "Status", key: "status" },
-              { header: "Joined Date", key: (row) => formatDate(row.createdAt) }
-            ]}
-          />
+          <ExportDropdown exportType="creators" filters={{ query: searchQuery, status: selectedStatus === "all" ? undefined : selectedStatus, plan: selectedPlan === "all" ? undefined : selectedPlan }} />
           <div className="flex items-center gap-3 text-xs text-[#6E6E69]">
             <span>
               Total: <strong className="text-[#141413]">{creators.length}</strong>

@@ -33,8 +33,10 @@ function mapReportFromSupabase(row: any): Report {
     artworkPrice: Number(artwork?.price) || 0,
     ownerName: owner?.full_name || artwork?.artist_name || row.owner_name || "Unknown Artist",
     ownerEmail: owner?.email || row.owner_email || "",
+    ownerRole: owner?.role || "Creator",
     reporterName: reporter?.full_name || row.reporter_name || "Community Member",
     reporterEmail: reporter?.email || row.reporter_email || "",
+    reporterRole: reporter?.role || "Collector",
   };
 }
 

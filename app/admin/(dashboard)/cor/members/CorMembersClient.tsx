@@ -137,19 +137,7 @@ export function CorMembersClient({
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          <ExportDropdown
-            data={filteredMembers}
-            filename="ERAS-COR-Members"
-            reportTitle="COR Members Report"
-            columns={[
-              { header: "Creator", key: "name" },
-              { header: "Role", key: "desiredRole" },
-              { header: "Skills", key: (row) => (row.skills || []).join(", ") },
-              { header: "Location", key: "location" },
-              { header: "Status", key: "status" },
-              { header: "Joined On", key: (row) => formatDate(row.joinedAt) }
-            ]}
-          />
+          <ExportDropdown exportType="cor-members" filters={{ query: searchQuery, status: statusFilter === "all" ? undefined : statusFilter }} />
           <Button
             variant="dark"
             onClick={() => {

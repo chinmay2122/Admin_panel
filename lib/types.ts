@@ -28,6 +28,13 @@ export interface Creator {
   id: string;
   userId: string;
   name: string;
+  email?: string;
+  phoneNumber?: string;
+  location?: string;
+  aboutMe?: string;
+  profilePicUrl?: string;
+  portfolioUrl?: string;
+  socialLinks?: Record<string, string>;
   discipline: string;
   plan: UserPlan;
   status: CreatorStatus;
@@ -417,8 +424,10 @@ export interface Report {
   artworkPrice?: number;
   ownerName?: string;
   ownerEmail?: string;
+  ownerRole?: string;
   reporterName?: string;
   reporterEmail?: string;
+  reporterRole?: string;
 }
 
 export interface ReportFilters {

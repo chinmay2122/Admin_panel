@@ -14,6 +14,8 @@ import {
   Archive,
   Palette,
   Eye,
+  EyeOff,
+  Star,
   Check,
   Loader2,
   ExternalLink,
@@ -44,6 +46,7 @@ import {
   createArtworkAction,
   createReportAction,
 } from "@/app/admin/actions";
+import { AdminUserLink } from "@/components/admin/AdminUserLink";
 import { ExportDropdown } from "@/components/admin/ExportDropdown";
 import {
   Table,
@@ -639,25 +642,14 @@ export function ArtworksClient({
             </h1>
 
             {/* Creator Byline */}
-            <div className="flex items-center gap-2.5 pt-1">
-              <div className="w-8 h-8 rounded-full bg-[#E5E3DE] text-[#4A4A45] font-semibold text-xs flex items-center justify-center">
-                {getInitials(viewingArtwork.creatorName)}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setCreatorFilter(viewingArtwork.creatorName);
-                  setViewingArtwork(null);
-                  toast.info(
-                    "Creator Filter",
-                    `Filtering artworks by ${viewingArtwork.creatorName}`
-                  );
-                }}
-                className="text-sm font-medium text-[#141413] hover:underline inline-flex items-center gap-1 cursor-pointer"
-              >
-                <span>{viewingArtwork.creatorName}</span>
-                <span className="text-[#8A8A85] text-xs">↗</span>
-              </button>
+            <div className="pt-1">
+              <AdminUserLink
+                userId={viewingArtwork.creatorId}
+                name={viewingArtwork.creatorName}
+                role="Creator"
+                avatar={null as any} // we'll rely on the default initials rendered internally or can pass false
+                className="text-sm"
+              />
             </div>
 
             {/* Description */}
@@ -710,62 +702,56 @@ export function ArtworksClient({
 
             {/* Actions Row */}
             <div className="flex flex-wrap items-center gap-2.5 pt-2">
-              <button
-                type="button"
+              <Button
+                variant="danger"
+                size="sm"
+                className="inline-flex items-center justify-center gap-2"
                 onClick={() => {
-                  toast.success(
-                    "Interest Expressed",
-                    `Your curatorial interest in "${viewingArtwork.title}" has been registered.`
-                  );
+                  setSelectedArtwork(viewingArtwork);
+                  setIsDeleteModalOpen(true);
                 }}
-                className="px-5 py-2.5 rounded-full bg-[#141413] text-white text-xs sm:text-sm font-medium hover:bg-[#2A2A28] active:bg-black transition-colors inline-flex items-center gap-2 cursor-pointer shadow-xs"
               >
-                <span>Express Interest</span>
-                <span>→</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setCreatorFilter(viewingArtwork.creatorName);
-                  setViewingArtwork(null);
-                  toast.info(
-                    "Viewing Creator",
-                    `Navigated to artworks by ${viewingArtwork.creatorName}`
-                  );
-                }}
-                className="px-5 py-2.5 rounded-full bg-white border border-[#D5D3CE] text-xs sm:text-sm font-medium text-[#141413] hover:bg-[#F7F6F2] transition-colors cursor-pointer"
-              >
-                Creator
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  toast.success(
-                    "Saved",
-                    `"${viewingArtwork.title}" has been saved to your curatorial list.`
-                  );
-                }}
-                className="w-10 h-10 rounded-full bg-white border border-[#D5D3CE] text-[#141413] hover:bg-[#F7F6F2] hover:border-[#141413] transition-colors cursor-pointer flex items-center justify-center shrink-0"
-                title="Save artwork"
-                aria-label="Save artwork"
-              >
-                <SaveIcon size={16} strokeWidth={2} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsReportModalOpen(true)}
-                className="group w-10 h-10 rounded-full bg-white border border-[#E8E8E3] text-[#6E6E69] hover:text-red-600 hover:border-red-200 hover:bg-red-50/50 transition-colors cursor-pointer flex items-center justify-center shrink-0"
-                title="Report artwork"
-                aria-label="Report artwork"
-              >
-                <TriangleAlertIcon size={16} strokeWidth={2} className="text-[#8A8A85] group-hover:text-red-600 transition-colors" />
-              </button>
-            </div>
+                <Trash2 className="w-4 h-4" />
+                Remove
+              </Button>
 
-            {/* Subtext */}
-            <p className="text-xs text-[#7A7A75] leading-normal pt-3 max-w-lg">
-              A direct connection, not a checkout. Pricing and any acquisition are discussed privately with the creator.
-            </p>
+              <Button
+                variant={viewingArtwork.isFeatured ? "primary" : "outline"}
+                size="sm"
+                className="inline-flex items-center justify-center gap-2"
+                onClick={async () => {
+                  await handleToggleFeature(viewingArtwork);
+                  // Update viewingArtwork so the Drawer UI updates immediately
+                  setViewingArtwork(prev => prev ? { ...prev, isFeatured: !prev.isFeatured } : null);
+                }}
+              >
+                <Star className={`w-4 h-4 ${viewingArtwork.isFeatured ? "fill-current" : ""}`} />
+                {viewingArtwork.isFeatured ? "Featured" : "Feature"}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="inline-flex items-center justify-center gap-2"
+                onClick={async () => {
+                  await handleToggleHide(viewingArtwork);
+                  // Update viewingArtwork so the Drawer UI updates immediately
+                  setViewingArtwork(prev => prev ? { ...prev, status: prev.status === "draft" ? "published" : "draft" } : null);
+                }}
+              >
+                {viewingArtwork.status === "draft" || viewingArtwork.status === "rejected" ? (
+                  <>
+                    <Eye className="w-4 h-4" />
+                    Show
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="w-4 h-4" />
+                    Hide
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -887,20 +873,7 @@ export function ArtworksClient({
               </button>
             </div>
 
-            <ExportDropdown
-              data={filteredArtworks}
-              filename="ERAS-Artworks"
-              reportTitle="Platform Artworks Report"
-              columns={[
-                { header: "Artwork Title", key: "title" },
-                { header: "Artist", key: "creatorName" },
-                { header: "Medium", key: "medium" },
-                { header: "Dimensions", key: "dimensions" },
-                { header: "Price", key: (row) => row.price ? formatCurrency(row.price) : "Price on request" },
-                { header: "Status", key: "status" },
-                { header: "Date Added", key: (row) => formatDate(row.createdAt) }
-              ]}
-            />
+            <ExportDropdown exportType="artworks" filters={{ query: debouncedSearch, status: statusFilter === "all" ? undefined : statusFilter, creatorName: creatorFilter === "all" ? undefined : creatorFilter }} />
 
             {/* + Add Artwork Button */}
             <button
@@ -971,23 +944,7 @@ export function ArtworksClient({
 
           {/* Creators & Media Dropdowns */}
           <div className="flex items-center gap-2">
-            {/* Creator Dropdown */}
-            <select
-              value={creatorFilter}
-              onChange={(e) => {
-                setCreatorFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              aria-label="Filter by creator"
-              className="text-xs px-2.5 py-1.5 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] focus:outline-none focus:border-[#B8532F] cursor-pointer"
-            >
-              <option value="all">All Creators</option>
-              {distinctCreators.map((creator) => (
-                <option key={creator} value={creator}>
-                  {creator}
-                </option>
-              ))}
-            </select>
+
 
             {/* Medium Dropdown */}
             <select

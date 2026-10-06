@@ -196,20 +196,7 @@ export function CorOpportunitiesClient({
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          <ExportDropdown
-            data={filteredOpportunities}
-            filename="ERAS-COR-Opportunities"
-            reportTitle="COR Opportunities Report"
-            columns={[
-              { header: "Opportunity", key: "title" },
-              { header: "Company", key: "company" },
-              { header: "Location", key: "location" },
-              { header: "Workplace", key: "workplaceType" },
-              { header: "Salary", key: (row) => row.salary || "Competitive" },
-              { header: "Skills", key: (row) => row.requiredSkills.join(", ") },
-              { header: "Status", key: "status" }
-            ]}
-          />
+          <ExportDropdown exportType="cor-opportunities" filters={{ query: searchQuery, status: statusFilter === "all" ? undefined : statusFilter }} />
           <Button
             variant="primary"
             onClick={() => setIsAddModalOpen(true)}

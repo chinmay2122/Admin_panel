@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   ArrowUpDown,
   ArrowUp,
@@ -14,7 +14,7 @@ import {
   Calendar,
   Award,
 } from "lucide-react";
-import { Collector, CollectorStatus, UserPlan } from "@/lib/types";
+import { Collector, CollectorStatus } from "@/lib/types";
 import {
   Table,
   TableHeader,
@@ -38,7 +38,7 @@ interface CollectorsClientProps {
   preferences: string[];
 }
 
-type SortField = "name" | "preferences" | "plan" | "status" | "createdAt";
+type SortField = "name" | "preferences" | "status" | "createdAt";
 type SortDirection = "asc" | "desc";
 
 function formatDate(dateStr: string): string {
@@ -107,11 +107,6 @@ export function CollectorsClient({
         return false;
       }
 
-      // Plan filter
-      if (selectedPlan !== "all" && Collector.plan !== selectedPlan) {
-        return false;
-      }
-
       // Status filter
       if (selectedStatus !== "all" && Collector.status !== selectedStatus) {
         return false;
@@ -119,7 +114,7 @@ export function CollectorsClient({
 
       return true;
     });
-  }, [Collectors, searchQuery, selectedpreferences, selectedPlan, selectedStatus]);
+  }, [Collectors, searchQuery, selectedpreferences, selectedStatus]);
 
   // Sorting
   const sortedCollectors = useMemo(() => {
@@ -172,9 +167,10 @@ export function CollectorsClient({
     );
   };
 
-  const handleRowClick = (Collector: Collector) => {
-    setSelectedCollector(Collector);
-    setIsDrawerOpen(true);
+  const router = useRouter();
+
+  const handleRowClick = (collector: Collector) => {
+    router.push(`/admin/collectors/${collector.id}`);
   };
 
   // Drawer action: Approve pending Collector (optimistic)
@@ -256,42 +252,7 @@ export function CollectorsClient({
     }
   };
 
-  // Drawer action: Change plan (optimistic)
-  const handleChangePlan = async (newPlan: UserPlan) => {
-    if (!selectedCollector || selectedCollector.plan === newPlan) return;
-    const CollectorName = selectedCollector.name;
-    const previous = { ...selectedCollector };
-    const updated = { ...selectedCollector, plan: newPlan };
 
-    setSelectedCollector(updated);
-    setCollectors((prev) =>
-      prev.map((c) => (c.id === selectedCollector.id ? updated : c))
-    );
-
-    setIsUpdating(true);
-    try {
-      const res = await updateCollectorAction(selectedCollector.id, {
-        plan: newPlan,
-      });
-      if (!res.success) {
-        setSelectedCollector(previous);
-        setCollectors((prev) =>
-          prev.map((c) => (c.id === selectedCollector.id ? previous : c))
-        );
-        toast.error("Failed to update plan", res.error || "Please try again.");
-      } else {
-        toast.success("Plan updated", `${CollectorName} is now on the ${newPlan?.toUpperCase()} plan.`);
-      }
-    } catch {
-      setSelectedCollector(previous);
-      setCollectors((prev) =>
-        prev.map((c) => (c.id === selectedCollector.id ? previous : c))
-      );
-      toast.error("Network error", "Could not update plan.");
-    } finally {
-      setIsUpdating(false);
-    }
-  };
 
   // Filter Bar configuration reusing FilterBar component
   const filterConfigs: FilterSelectConfig[] = [
@@ -306,21 +267,6 @@ export function CollectorsClient({
       options: [
         { label: "All preferences", value: "all" },
         ...preferences.map((d) => ({ label: d, value: d })),
-      ],
-    },
-    {
-      id: "plan",
-      label: "Plan",
-      value: selectedPlan,
-      onChange: (val) => {
-        setSelectedPlan(val);
-        setCurrentPage(1);
-      },
-      options: [
-        { label: "All Plans", value: "all" },
-        { label: "Free", value: "free" },
-        { label: "Elite", value: "elite" },
-        { label: "Pro", value: "pro" },
       ],
     },
     {
@@ -343,13 +289,11 @@ export function CollectorsClient({
   const hasActiveFilters =
     Boolean(searchQuery) ||
     selectedpreferences !== "all" ||
-    selectedPlan !== "all" ||
     selectedStatus !== "all";
 
   const handleResetFilters = () => {
     setSearchQuery("");
     setSelectedpreferences("all");
-    setSelectedPlan("all");
     setSelectedStatus("all");
     setCurrentPage(1);
   };
@@ -367,19 +311,7 @@ export function CollectorsClient({
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-          <ExportDropdown
-            data={filteredCollectors}
-            filename="ERAS-Collectors"
-            reportTitle="Platform Collectors Report"
-            columns={[
-              { header: "Collector Name", key: "name" },
-              { header: "ID", key: "id" },
-              { header: "preferences", key: "preferences" },
-              { header: "Plan", key: (row) => row.plan || "free" },
-              { header: "Status", key: "status" },
-              { header: "Joined Date", key: (row) => formatDate(row.createdAt) }
-            ]}
-          />
+          <ExportDropdown exportType="collectors" filters={{ query: searchQuery, status: selectedStatus === "all" ? undefined : selectedStatus}} />
           <div className="flex items-center gap-3 text-xs text-[#6E6E69]">
             <span>
               Total: <strong className="text-[#141413]">{Collectors.length}</strong>
@@ -437,33 +369,6 @@ export function CollectorsClient({
               <tr>
                 <TableHead>
                   <button
-                    onClick={() => handleSort("name")}
-                    className="group inline-flex items-center gap-1.5 hover:text-[#141413] cursor-pointer"
-                  >
-                    <span>Collector</span>
-                    {renderSortIndicator("name")}
-                  </button>
-                </TableHead>
-                <TableHead>
-                  <button
-                    onClick={() => handleSort("preferences")}
-                    className="group inline-flex items-center gap-1.5 hover:text-[#141413] cursor-pointer"
-                  >
-                    <span>preferences</span>
-                    {renderSortIndicator("preferences")}
-                  </button>
-                </TableHead>
-                <TableHead>
-                  <button
-                    onClick={() => handleSort("plan")}
-                    className="group inline-flex items-center gap-1.5 hover:text-[#141413] cursor-pointer"
-                  >
-                    <span>Plan</span>
-                    {renderSortIndicator("plan")}
-                  </button>
-                </TableHead>
-                <TableHead>
-                  <button
                     onClick={() => handleSort("status")}
                     className="group inline-flex items-center gap-1.5 hover:text-[#141413] cursor-pointer"
                   >
@@ -511,26 +416,6 @@ export function CollectorsClient({
                     {Collector.preferences}
                   </TableCell>
 
-                  {/* Plan */}
-                  <TableCell>
-                    {Collector.plan ? (
-                      <Badge
-                        variant={
-                          Collector.plan === "elite"
-                            ? "warning"
-                            : Collector.plan === "pro"
-                            ? "accent"
-                            : "default"
-                        }
-                        size="sm"
-                      >
-                        {Collector.plan}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-[#8A8A85]">—</span>
-                    )}
-                  </TableCell>
-
                   {/* Status */}
                   <TableCell>
                     <Badge
@@ -572,7 +457,7 @@ export function CollectorsClient({
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         title={selectedCollector?.name || "Collector Profile"}
-        description="Curatorial review, plan tier, and studio permissions"
+        description="Curatorial review and studio permissions"
         footer={
           selectedCollector && (
             <div className="flex items-center justify-between w-full">
@@ -651,54 +536,10 @@ export function CollectorsClient({
                   >
                     {selectedCollector.status}
                   </Badge>
-                  {selectedCollector.plan && (
-                    <Badge variant="accent" size="sm">
-                      {selectedCollector.plan.toUpperCase()} Plan
-                    </Badge>
-                  )}
                 </div>
               </div>
             </div>
 
-            {/* Action: Change Plan (Free / Elite / Pro) */}
-            <div className="space-y-2.5 p-4 rounded-lg bg-[#FAFAF8] border border-[#E8E8E3]">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-[#141413] flex items-center gap-1.5">
-                  <Award className="w-3.5 h-3.5 text-[#B8532F]" />
-                  <span>Subscription Plan</span>
-                </label>
-                <span className="text-[11px] text-[#71716D]">
-                  Current:{" "}
-                  <strong className="capitalize text-[#141413]">
-                    {selectedCollector.plan || "Free"}
-                  </strong>
-                </span>
-              </div>
-              <p className="text-[11px] text-[#6E6E69]">
-                Assign Collector tier to adjust commission allowances and featured
-                curation placement.
-              </p>
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                {(["free", "elite", "pro"] as UserPlan[]).map((plan) => {
-                  const isSelected = selectedCollector.plan === plan;
-                  return (
-                    <button
-                      key={plan}
-                      type="button"
-                      disabled={isUpdating}
-                      onClick={() => handleChangePlan(plan)}
-                      className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
-                        isSelected
-                          ? "bg-[#141413] text-white border-[#141413]"
-                          : "bg-white text-[#52524E] border-[#E8E8E3] hover:bg-[#F5F5F0]"
-                      }`}
-                    >
-                      {plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : ""}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
 
             {/* Collector Metadata */}
             <div className="space-y-3 text-xs">

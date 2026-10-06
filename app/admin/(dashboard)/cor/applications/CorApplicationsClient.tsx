@@ -183,12 +183,7 @@ export function CorApplicationsClient({
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
-          <ExportDropdown
-            data={filteredApplications}
-            filename="ERAS-COR-Applications"
-            reportTitle="COR Applications Report"
-            columns={exportColumns}
-          />
+          <ExportDropdown exportType="cor-applications" filters={{ query: searchQuery, status: statusFilter === "all" ? undefined : statusFilter, company: companyFilter === "all" ? undefined : companyFilter }} />
           <Button
             variant="dark"
             onClick={() => setApplyModalOpen(true)}

@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
 import { ExportDropdown } from "@/components/admin/ExportDropdown";
+import { AdminUserLink } from "@/components/admin/AdminUserLink";
 import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui";
@@ -378,19 +379,7 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
             Keep the community safe, considered and respectful.
           </p>
         </div>
-        <ExportDropdown
-          data={filteredReports}
-          filename="ERAS-Reports"
-          reportTitle="Platform Moderation Reports"
-          columns={[
-            { header: "Reported Content", key: (row) => row.artworkTitle || "Untitled" },
-            { header: "User", key: (row) => row.ownerName || "Unknown" },
-            { header: "Reason", key: "reason" },
-            { header: "Reporter", key: (row) => row.reporterName || "Community Member" },
-            { header: "Date", key: (row) => formatDate(row.createdAt) },
-            { header: "Status", key: "status" }
-          ]}
-        />
+        <ExportDropdown exportType="reports" filters={{ query: debouncedSearch, status: activeTab === "all" ? undefined : activeTab }} />
       </div>
 
       {/* ========================================================================= */}
@@ -527,8 +516,16 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                     </TableCell>
 
                     {/* 2. User (Creator) */}
-                    <TableCell className="py-4 text-sm text-[#141413] whitespace-nowrap">
-                      {rep.ownerName || "Unknown Artist"}
+                    <TableCell className="py-4 text-sm whitespace-nowrap">
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <AdminUserLink
+                          userId={rep.artworkOwnerId || ""}
+                          name={rep.ownerName || "Unknown Artist"}
+                          role={rep.ownerRole || "Creator"}
+                          showIcon={false}
+                          avatar={null as any}
+                        />
+                      </div>
                     </TableCell>
 
                     {/* 3. Reason */}
@@ -537,8 +534,16 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                     </TableCell>
 
                     {/* 4. Reporter */}
-                    <TableCell className="py-4 text-sm text-[#141413] whitespace-nowrap">
-                      {rep.reporterName || "Community Member"}
+                    <TableCell className="py-4 text-sm whitespace-nowrap">
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <AdminUserLink
+                          userId={rep.reporterUserId}
+                          name={rep.reporterName || "Community Member"}
+                          role={rep.reporterRole || "Collector"}
+                          showIcon={false}
+                          avatar={null as any}
+                        />
+                      </div>
                     </TableCell>
 
                     {/* 5. Date */}
@@ -748,9 +753,16 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                     {selectedReport.artworkStatus || "published"}
                   </span>
                 </div>
-                <p className="text-xs text-[#6E6E69]">
-                  by <span className="font-medium text-[#141413]">{selectedReport.ownerName}</span>
-                </p>
+                <div className="text-xs text-[#6E6E69] flex items-center gap-1 mt-1">
+                  by
+                  <AdminUserLink
+                    userId={selectedReport.artworkOwnerId || ""}
+                    name={selectedReport.ownerName || "Unknown Artist"}
+                    role={selectedReport.ownerRole || "Creator"}
+                    showIcon={false}
+                    avatar={null as any}
+                  />
+                </div>
                 <div className="pt-2 flex items-center gap-4 text-xs text-[#8A8A85]">
                   <span>{selectedReport.artworkMedium}</span>
                   <span>•</span>
@@ -763,14 +775,28 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
             <div className="rounded-xl border border-[#E8E8E3] p-4 space-y-3 bg-white text-xs">
               <div className="flex justify-between py-1 border-b border-[#F0F0EB]">
                 <span className="text-[#8A8A85]">Reported by</span>
-                <span className="font-medium text-[#141413]">
-                  {selectedReport.reporterName} {selectedReport.reporterEmail && `(${selectedReport.reporterEmail})`}
+                <span className="font-medium text-[#141413] flex items-center gap-1">
+                  <AdminUserLink
+                    userId={selectedReport.reporterUserId}
+                    name={selectedReport.reporterName || "Community Member"}
+                    role={selectedReport.reporterRole || "Collector"}
+                    showIcon={false}
+                    avatar={null as any}
+                  />
+                  {selectedReport.reporterEmail && <span className="font-normal text-[#8A8A85]">({selectedReport.reporterEmail})</span>}
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#F0F0EB]">
                 <span className="text-[#8A8A85]">Artwork Owner</span>
-                <span className="font-medium text-[#141413]">
-                  {selectedReport.ownerName} {selectedReport.ownerEmail && `(${selectedReport.ownerEmail})`}
+                <span className="font-medium text-[#141413] flex items-center gap-1">
+                  <AdminUserLink
+                    userId={selectedReport.artworkOwnerId || ""}
+                    name={selectedReport.ownerName || "Unknown Artist"}
+                    role={selectedReport.ownerRole || "Creator"}
+                    showIcon={false}
+                    avatar={null as any}
+                  />
+                  {selectedReport.ownerEmail && <span className="font-normal text-[#8A8A85]">({selectedReport.ownerEmail})</span>}
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#F0F0EB]">

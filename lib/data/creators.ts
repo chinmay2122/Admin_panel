@@ -5,10 +5,18 @@ import { getSupabaseAdmin } from "../supabase/server";
 let creatorsStore: Creator[] = [...seedCreators];
 
 function mapCreatorFromSupabase(row: any): Creator {
+  const loc = [row.location_city, row.location_country].filter(Boolean).join(", ");
   return {
     id: row.id,
     userId: row.id,
     name: row.full_name || "Anonymous Creator",
+    email: row.email,
+    phoneNumber: row.phone_number,
+    location: loc || undefined,
+    aboutMe: row.about_me,
+    profilePicUrl: row.profile_pic_url,
+    portfolioUrl: row.portfolio_url,
+    socialLinks: row.social_links || undefined,
     discipline: row.primary_medium || row.art_forms || "Visual Arts",
     plan: row.plan ? (row.plan.toLowerCase() as any) : (row.is_premium ? "elite" : "pro"),
     status: "active",

@@ -176,19 +176,7 @@ export function CorRequestsClient({
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <ExportDropdown
-            data={filteredRequests}
-            filename="ERAS-COR-Requests"
-            reportTitle="COR Requests Report"
-            columns={[
-              { header: "Creator", key: "creatorName" },
-              { header: "Email", key: "creatorEmail" },
-              { header: "Requested On", key: (row) => formatDate(row.createdAt) },
-              { header: "Preferred Role", key: "desiredRole" },
-              { header: "Experience", key: "experienceYears" },
-              { header: "Status", key: "status" }
-            ]}
-          />
+          <ExportDropdown exportType="cor-requests" filters={{ query: searchQuery, status: statusFilter === "all" ? undefined : statusFilter }} />
           {pendingCount > 0 && (
             <div className="shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] text-[#92400E] text-xs font-semibold whitespace-nowrap">
               <span className="w-2 h-2 rounded-full bg-[#F59E0B] animate-pulse" />
