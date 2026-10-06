@@ -35,6 +35,32 @@ async function testSupabase() {
     console.error("Error fetching reports:", repError);
   } else {
     console.log(`Found ${reports?.length} reports:`, reports);
+    if (reports && reports.length > 0) {
+      const targetReport = reports[0];
+      console.log(`\n2c. Testing dismissing report ${targetReport.id}...`);
+      const payload: Record<string, any> = {
+        status: "dismissed",
+        updated_at: new Date().toISOString(),
+        resolved_at: new Date().toISOString(),
+        moderation_action: "report_dismissed",
+        moderation_note: "Test dismissal note",
+      };
+      const { data: updatedRep, error: updateRepErr } = await supabase
+        .from("reports")
+        .update(payload)
+        .eq("id", targetReport.id)
+        .select()
+        .single();
+
+      if (updateRepErr) {
+        console.error("❌ Failed to update report status:", updateRepErr);
+      } else {
+        console.log("✅ Successfully dismissed report:", updatedRep);
+        // Revert back to pending
+        await supabase.from("reports").update({ status: "pending", moderation_action: null, moderation_note: null, resolved_at: null }).eq("id", targetReport.id);
+        console.log("✅ Reverted report back to pending.");
+      }
+    }
   }
 
   if (profiles && profiles.length > 0) {

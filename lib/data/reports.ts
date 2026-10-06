@@ -52,7 +52,7 @@ export const reportsRepo = {
       try {
         let query = supabase
           .from("reports")
-          .select("id, artwork_id, reporter_user_id, artwork_owner_id, reason, details, status, moderation_action, moderation_note, resolved_by, resolved_at, created_at, updated_at, artwork:artworks(id, title, image_url, art_type, dimensions, price, status, artist_name, creator_id), reporter:profiles!reports_reporter_user_id_fkey(id, full_name, email, role), owner:profiles!reports_artwork_owner_id_fkey(id, full_name, email, role)");
+          .select("*, artwork:artworks(*)");
 
         if (filters?.status && filters.status !== "all") {
           query = query.eq("status", filters.status);
@@ -132,7 +132,7 @@ export const reportsRepo = {
       try {
         const { data, error } = await supabase
           .from("reports")
-          .select("id, artwork_id, reporter_user_id, artwork_owner_id, reason, details, status, moderation_action, moderation_note, resolved_by, resolved_at, created_at, updated_at, artwork:artworks(id, title, image_url, art_type, dimensions, price, status, artist_name, creator_id), reporter:profiles!reports_reporter_user_id_fkey(id, full_name, email, role), owner:profiles!reports_artwork_owner_id_fkey(id, full_name, email, role)")
+          .select("*, artwork:artworks(*)")
           .eq("id", id)
           .maybeSingle();
 
@@ -164,7 +164,11 @@ export const reportsRepo = {
     details?: string;
   }): Promise<Report> {
     const supabase = getSupabaseAdmin();
-    const reporterId = data.reporterUserId || "usr_04";
+    const isUuid = (val?: string) =>
+      typeof val === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+
+    const reporterId = isUuid(data.reporterUserId) ? data.reporterUserId : undefined;
 
     let ownerId: string | undefined = undefined;
     let artworkTitle = "Reported Artwork";
@@ -200,8 +204,8 @@ export const reportsRepo = {
       try {
         const payload: Record<string, any> = {
           artwork_id: data.artworkId,
-          reporter_user_id: reporterId,
-          artwork_owner_id: ownerId,
+          reporter_user_id: reporterId || null,
+          artwork_owner_id: ownerId || null,
           reason: data.reason,
           details: data.details || "",
           status: "pending",
@@ -209,7 +213,7 @@ export const reportsRepo = {
 
         const { data: created, error } = await (supabase.from("reports") as any)
           .insert(payload)
-          .select("*, artwork:artworks(*), reporter:profiles!reports_reporter_user_id_fkey(*), owner:profiles!reports_artwork_owner_id_fkey(*)")
+          .select("*, artwork:artworks(*)")
           .single();
 
         if (!error && created) {
@@ -232,7 +236,7 @@ export const reportsRepo = {
     const newReport: Report = {
       id: `rep_${Date.now().toString(36)}`,
       artworkId: data.artworkId,
-      reporterUserId: reporterId,
+      reporterUserId: reporterId || "usr_04",
       artworkOwnerId: ownerId,
       reason: data.reason,
       details: data.details || "",
@@ -271,6 +275,9 @@ export const reportsRepo = {
   ): Promise<Report | null> {
     const now = new Date().toISOString();
     const supabase = getSupabaseAdmin();
+    const isUuid = (val?: string) =>
+      typeof val === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
 
     if (supabase) {
       try {
@@ -281,7 +288,9 @@ export const reportsRepo = {
 
         if (status === "resolved" || status === "dismissed") {
           payload.resolved_at = now;
-          if (adminId) payload.resolved_by = adminId;
+          if (adminId && isUuid(adminId)) {
+            payload.resolved_by = adminId;
+          }
         }
         if (action) payload.moderation_action = action;
         if (note) payload.moderation_note = note;
@@ -289,7 +298,7 @@ export const reportsRepo = {
         const { data: updated, error } = await (supabase.from("reports") as any)
           .update(payload)
           .eq("id", id)
-          .select("*, artwork:artworks(*), reporter:profiles!reports_reporter_user_id_fkey(*), owner:profiles!reports_artwork_owner_id_fkey(*)")
+          .select("*, artwork:artworks(*)")
           .single();
 
         if (!error && updated) {
@@ -297,6 +306,8 @@ export const reportsRepo = {
           const idx = reportsStore.findIndex((r) => r.id === id);
           if (idx !== -1) reportsStore[idx] = mapped;
           return mapped;
+        } else if (error) {
+          console.error("Supabase update report error:", error);
         }
       } catch (err) {
         console.warn("Supabase update report status failed, using fallback:", err);
@@ -331,6 +342,10 @@ export const reportsRepo = {
     note?: string;
   }): Promise<void> {
     const supabase = getSupabaseAdmin();
+    const isUuid = (val?: string) =>
+      typeof val === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+
     // Security scrubbing: Ensure no password, authorization tokens, or API keys are ever stored in audit logs
     const sanitizedNote = entry.note
       ? entry.note.replace(/(password|token|bearer|secret|api_key|authorization)[=:\s]+[^\s,;]+/gi, "$1=[REDACTED]")
@@ -348,12 +363,12 @@ export const reportsRepo = {
     if (supabase) {
       try {
         await (supabase.from("moderation_audit_logs") as any).insert({
-          report_id: entry.reportId,
-          artwork_id: entry.artworkId,
-          target_user_id: entry.targetUserId,
-          admin_id: entry.adminId,
+          report_id: isUuid(entry.reportId) ? entry.reportId : null,
+          artwork_id: isUuid(entry.artworkId) ? entry.artworkId : null,
+          target_user_id: isUuid(entry.targetUserId) ? entry.targetUserId : null,
+          admin_id: isUuid(entry.adminId) ? entry.adminId : null,
           action: entry.action,
-          note: entry.note,
+          note: sanitizedNote || entry.note,
         });
       } catch (err) {
         console.warn("Supabase audit log insert failed:", err);
