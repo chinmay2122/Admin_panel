@@ -364,10 +364,10 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
   return (
     <div className="space-y-6 pb-16 animate-in fade-in duration-150">
       {/* ========================================================================= */}
-      {/* 1. PAGE HEADER (iRAS Studio Editorial Style)                              */}
+      {/* 1. PAGE HEADER (ERAS Studio Editorial Style)                              */}
       {/* ========================================================================= */}
       {/* ========================================================================= */}
-      {/* 1. PAGE HEADER (iRAS Studio Editorial Style)                              */}
+      {/* 1. PAGE HEADER (ERAS Studio Editorial Style)                              */}
       {/* ========================================================================= */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -380,7 +380,7 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
         </div>
         <ExportDropdown
           data={filteredReports}
-          filename="iRAS-Reports"
+          filename="ERAS-Reports"
           reportTitle="Platform Moderation Reports"
           columns={[
             { header: "Reported Content", key: (row) => row.artworkTitle || "Untitled" },

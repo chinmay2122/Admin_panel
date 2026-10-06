@@ -369,7 +369,7 @@ export function CreatorsClient({
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
           <ExportDropdown
             data={filteredCreators}
-            filename="iRAS-Creators"
+            filename="ERAS-Creators"
             reportTitle="Platform Creators Report"
             columns={[
               { header: "Creator Name", key: "name" },

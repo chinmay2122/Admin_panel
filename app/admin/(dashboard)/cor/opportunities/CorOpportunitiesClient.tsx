@@ -198,7 +198,7 @@ export function CorOpportunitiesClient({
         <div className="flex items-center gap-3 shrink-0">
           <ExportDropdown
             data={filteredOpportunities}
-            filename="iRAS-COR-Opportunities"
+            filename="ERAS-COR-Opportunities"
             reportTitle="COR Opportunities Report"
             columns={[
               { header: "Opportunity", key: "title" },

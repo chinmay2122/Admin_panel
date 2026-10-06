@@ -136,7 +136,7 @@ export function SettingsClient({ initialSettings }: SettingsClientProps) {
   return (
     <div className="space-y-6 pb-20 max-w-4xl animate-in fade-in duration-150">
       {/* ========================================================================= */}
-      {/* 1. PAGE HEADER (iRAS Studio Editorial Style)                              */}
+      {/* 1. PAGE HEADER (ERAS Studio Editorial Style)                              */}
       {/* ========================================================================= */}
       <div className="border-b border-[#E8E8E3] pb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>

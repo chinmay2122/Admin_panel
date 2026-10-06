@@ -35,7 +35,7 @@ const ReportPDF = ({ data, columns, title }: { data: any[], columns: ExportColum
   <Document>
     <Page size="A4" style={styles.page} orientation="landscape">
       <View style={styles.header}>
-        <Text style={styles.title}>iRAS Studio - {title}</Text>
+        <Text style={styles.title}>ERAS Studio - {title}</Text>
         <Text style={styles.subtitle}>Generated: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} | Total Records: {data.length}</Text>
       </View>
       <View style={styles.table}>

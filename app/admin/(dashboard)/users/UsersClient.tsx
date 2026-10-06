@@ -271,7 +271,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
         <div className="flex items-center gap-3 shrink-0">
           <ExportDropdown
             data={filteredUsers}
-            filename="iRAS-Users"
+            filename="ERAS-Users"
             reportTitle="Platform Users Report"
             columns={[
               { header: "Name", key: "name" },

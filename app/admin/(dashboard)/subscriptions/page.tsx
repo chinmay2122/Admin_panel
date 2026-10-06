@@ -5,7 +5,7 @@ import { SubscriptionsClient } from "./SubscriptionsClient";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 export const metadata: Metadata = {
-  title: "Subscriptions | iRAS Studio Admin",
+  title: "Subscriptions | ERAS Studio Admin",
   description: "Platform subscription tiers, membership plan controls, and subscriber management.",
 };
 

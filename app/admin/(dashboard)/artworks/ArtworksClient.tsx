@@ -889,7 +889,7 @@ export function ArtworksClient({
 
             <ExportDropdown
               data={filteredArtworks}
-              filename="iRAS-Artworks"
+              filename="ERAS-Artworks"
               reportTitle="Platform Artworks Report"
               columns={[
                 { header: "Artwork Title", key: "title" },
@@ -916,7 +916,7 @@ export function ArtworksClient({
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. SEARCH & FILTER BAR (iRAS Studio Prototype Style) */}
+      {/* 2. SEARCH & FILTER BAR (ERAS Studio Prototype Style) */}
       {/* ========================================================================= */}
       <div className="space-y-3">
         {/* Search Bar */}
@@ -1095,7 +1095,7 @@ export function ArtworksClient({
         />
       ) : viewMode === "grid" ? (
         /* ===================================================================== */
-        /* GRID VIEW: Clean, Compact iRAS Studio Artwork Cards                   */
+        /* GRID VIEW: Clean, Compact ERAS Studio Artwork Cards                   */
         /* ===================================================================== */
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -1331,7 +1331,7 @@ export function ArtworksClient({
       )}
 
       {/* ========================================================================= */}
-      {/* 5. RIGHT DETAIL DRAWER (iRAS Studio Prototype Style)                      */}
+      {/* 5. RIGHT DETAIL DRAWER (ERAS Studio Prototype Style)                      */}
       {/* ========================================================================= */}
       <Drawer
         isOpen={isDrawerOpen}

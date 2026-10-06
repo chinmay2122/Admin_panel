@@ -178,7 +178,7 @@ export function CorRequestsClient({
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <ExportDropdown
             data={filteredRequests}
-            filename="iRAS-COR-Requests"
+            filename="ERAS-COR-Requests"
             reportTitle="COR Requests Report"
             columns={[
               { header: "Creator", key: "creatorName" },
