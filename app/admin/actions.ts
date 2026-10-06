@@ -228,6 +228,137 @@ export async function deleteCollectorAction(
 // Artwork Actions
 // ==============================================================================
 
+import { getSupabaseAdmin } from "@/lib/supabase/server";
+
+// ==============================================================================
+// Artwork Actions & Media Uploads
+// ==============================================================================
+
+/**
+ * Upload Artwork Media to Supabase Storage (Bucket: artworks)
+ * Strictly validates MIME type, file size (max 10MB), and isolates folder per creator.
+ */
+export async function uploadArtworkMediaAction(
+  formData: FormData
+): Promise<{
+  success: boolean;
+  url?: string;
+  filePath?: string;
+  fileName?: string;
+  fileSize?: number;
+  error?: string;
+}> {
+  try {
+    await requireAdminSession("artwork:view_all");
+
+    const file = formData.get("file") as File | null;
+    const creatorId = (formData.get("creatorId") as string | null) || "general";
+
+    if (!file) {
+      return { success: false, error: "No media file provided." };
+    }
+
+    const ALLOWED_MIME_TYPES = [
+      "image/png",
+      "image/jpeg",
+      "image/jpg",
+      "image/webp",
+    ];
+
+    if (!ALLOWED_MIME_TYPES.includes(file.type.toLowerCase())) {
+      return {
+        success: false,
+        error: `Unsupported file format (${file.type || "unknown"}). Allowed: PNG, JPG, JPEG, WEBP.`,
+      };
+    }
+
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+    if (file.size > MAX_FILE_SIZE) {
+      return {
+        success: false,
+        error: `File size exceeds the 10 MB limit (${(file.size / (1024 * 1024)).toFixed(1)} MB uploaded).`,
+      };
+    }
+
+    const extMatch = file.name.match(/\.([a-zA-Z0-9]+)$/);
+    const ext = extMatch ? extMatch[1].toLowerCase() : "jpg";
+    const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const storagePath = `${creatorId}/${uniqueSuffix}.${ext}`;
+
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("artworks")
+        .upload(storagePath, buffer, {
+          contentType: file.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.warn("Supabase storage upload failed, attempting public URL fallback:", uploadError);
+      } else if (uploadData?.path) {
+        const { data: publicUrlData } = supabase.storage
+          .from("artworks")
+          .getPublicUrl(uploadData.path);
+
+        return {
+          success: true,
+          url: publicUrlData.publicUrl,
+          filePath: uploadData.path,
+          fileName: cleanFileName,
+          fileSize: file.size,
+        };
+      }
+    }
+
+    // Fallback for local/offline mock environments
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const base64 = buffer.toString("base64");
+    const dataUrl = `data:${file.type};base64,${base64}`;
+
+    return {
+      success: true,
+      url: dataUrl,
+      filePath: storagePath,
+      fileName: cleanFileName,
+      fileSize: file.size,
+    };
+  } catch (err: any) {
+    console.error("uploadArtworkMediaAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to upload artwork media.") };
+  }
+}
+
+/**
+ * Delete Artwork Media from Supabase Storage (Rollback / Cleanup)
+ */
+export async function deleteArtworkMediaAction(
+  filePath: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdminSession("artwork:view_all");
+
+    if (!filePath || typeof filePath !== "string") {
+      return { success: false, error: "Invalid storage file path." };
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      const { error } = await supabase.storage.from("artworks").remove([filePath]);
+      if (error) {
+        console.warn("Storage deletion failed:", error);
+      }
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("deleteArtworkMediaAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to delete storage file.") };
+  }
+}
+
 export async function createArtworkAction(data: {
   title: string;
   creatorId?: string;
@@ -237,6 +368,13 @@ export async function createArtworkAction(data: {
   price?: number;
   imageUrl?: string;
   status?: Artwork["status"];
+  year?: string;
+  location?: string;
+  collection?: string;
+  description?: string;
+  priceVisibility?: string;
+  availability?: string;
+  additionalImages?: string[];
 }): Promise<{ success: boolean; artwork?: Artwork; error?: string }> {
   try {
     await requireAdminSession("artwork:view_all");
@@ -281,6 +419,13 @@ export async function createArtworkAction(data: {
       price: typeof data.price === "number" && data.price >= 0 ? data.price : 0,
       imageUrl: data.imageUrl?.trim() || "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
       status: data.status || "published",
+      year: data.year?.trim() || new Date().getFullYear().toString(),
+      location: data.location?.trim(),
+      collection: data.collection?.trim(),
+      description: data.description?.trim(),
+      priceVisibility: data.priceVisibility,
+      availability: data.availability,
+      additionalImages: data.additionalImages,
     });
 
     return { success: true, artwork: created };

@@ -101,6 +101,18 @@ export function filterSafeArtworkUpdates(data: Partial<Artwork>): Partial<Artwor
   if (typeof data.isFlagged === "boolean") {
     safe.isFlagged = data.isFlagged;
   }
+  if (typeof data.year === "string") {
+    safe.year = data.year.trim().slice(0, 20);
+  }
+  if (typeof data.location === "string") {
+    safe.location = data.location.trim().slice(0, 100);
+  }
+  if (typeof data.collection === "string") {
+    safe.collection = data.collection.trim().slice(0, 100);
+  }
+  if (typeof data.availability === "string") {
+    safe.availability = data.availability.trim().slice(0, 50);
+  }
 
   return safe;
 }

@@ -1,12 +1,13 @@
 import React, { Suspense } from "react";
-import { artworksRepo } from "@/lib/data";
+import { artworksRepo, creatorsRepo } from "@/lib/data";
 import { ArtworksClient } from "./ArtworksClient";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 export default async function ArtworksPage() {
-  const [artworks, stats] = await Promise.all([
+  const [artworks, stats, creators] = await Promise.all([
     artworksRepo.list(),
     artworksRepo.stats(),
+    creatorsRepo.list(),
   ]);
 
   return (
@@ -30,6 +31,7 @@ export default async function ArtworksPage() {
         initialArtworks={artworks}
         distinctCreators={stats.distinctCreators}
         distinctMedia={stats.distinctMedia}
+        creators={creators}
       />
     </Suspense>
   );

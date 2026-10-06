@@ -30,7 +30,7 @@ import {
   Flag,
 } from "lucide-react";
 import { TriangleAlertIcon, SaveIcon } from "@/components/ui/icons";
-import { Artwork, ArtworkStatus } from "@/lib/types";
+import { Artwork, ArtworkStatus, Creator } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
@@ -48,6 +48,7 @@ import {
 } from "@/app/admin/actions";
 import { AdminUserLink } from "@/components/admin/AdminUserLink";
 import { ExportDropdown } from "@/components/admin/ExportDropdown";
+import { ArtworkUploadForm } from "@/components/artworks/ArtworkUploadForm";
 import {
   Table,
   TableHeader,
@@ -61,6 +62,7 @@ interface ArtworksClientProps {
   initialArtworks: Artwork[];
   distinctCreators: string[];
   distinctMedia: string[];
+  creators?: Creator[];
 }
 
 type ViewMode = "grid" | "table";
@@ -97,6 +99,7 @@ export function ArtworksClient({
   initialArtworks,
   distinctCreators,
   distinctMedia,
+  creators = [],
 }: ArtworksClientProps) {
   const toast = useToast();
   const searchParams = useSearchParams();
@@ -151,17 +154,6 @@ export function ArtworksClient({
 
   // Add Artwork modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isAdding, setIsAdding] = useState(false);
-  const [addForm, setAddForm] = useState({
-    title: "",
-    creatorName: "",
-    creatorId: "",
-    medium: "",
-    dimensions: "",
-    price: "",
-    imageUrl: "",
-    status: "published" as ArtworkStatus,
-  });
 
   // Report Artwork Modal state
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -531,58 +523,6 @@ export function ArtworksClient({
         setViewingArtwork((prev) => (prev ? { ...prev, isFlagged: !nextVal } : null));
       }
       toast.error("Network Error", "Could not update flagged status.");
-    }
-  };
-
-  // Add Artwork Handler
-  const handleAddArtwork = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!addForm.title.trim()) {
-      toast.error("Title required", "Please enter an artwork title.");
-      return;
-    }
-    if (!addForm.creatorName.trim()) {
-      toast.error("Creator required", "Please enter a creator name.");
-      return;
-    }
-
-    setIsAdding(true);
-    try {
-      const payload = {
-        title: addForm.title.trim(),
-        creatorName: addForm.creatorName.trim(),
-        creatorId: addForm.creatorId.trim() || undefined,
-        medium: addForm.medium.trim() || "Mixed Media",
-        dimensions: addForm.dimensions.trim() || "Dimensions on request",
-        price: parseFloat(addForm.price) || 0,
-        imageUrl:
-          addForm.imageUrl.trim() ||
-          "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
-        status: addForm.status,
-      };
-
-      const res = await createArtworkAction(payload);
-      if (!res.success || !res.artwork) {
-        toast.error("Failed to create artwork", res.error || "Please try again.");
-      } else {
-        setArtworks((prev) => [res.artwork!, ...prev]);
-        toast.success("Artwork added", `"${res.artwork.title}" added to catalog.`);
-        setIsAddModalOpen(false);
-        setAddForm({
-          title: "",
-          creatorName: "",
-          creatorId: "",
-          medium: "",
-          dimensions: "",
-          price: "",
-          imageUrl: "",
-          status: "published",
-        });
-      }
-    } catch (err: any) {
-      toast.error("Creation error", err.message || "Could not create artwork.");
-    } finally {
-      setIsAdding(false);
     }
   };
 
@@ -1591,149 +1531,24 @@ export function ArtworksClient({
       </Drawer>
 
       {/* ========================================================================= */}
-      {/* 6. ADD ARTWORK MODAL                                                      */}
+      {/* 6. ADD ARTWORK MODAL (UNIFIED CREATOR UPLOAD ARCHITECTURE)                */}
       {/* ========================================================================= */}
       <Modal
         isOpen={isAddModalOpen}
-        onClose={() => {
-          if (!isAdding) setIsAddModalOpen(false);
-        }}
+        onClose={() => setIsAddModalOpen(false)}
         title="Add Artwork to Catalog"
         description="Register a new curated piece with media specifications and publication status."
-        maxWidth="lg"
+        maxWidth="2xl"
       >
-        <form onSubmit={handleAddArtwork} className="space-y-4 py-1">
-          <div className="space-y-3 text-xs">
-            <Input
-              label="Artwork Title *"
-              required
-              placeholder="e.g. Resonance in Ochre IV"
-              value={addForm.title}
-              onChange={(e) => setAddForm((prev) => ({ ...prev, title: e.target.value }))}
-            />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-[#141413] mb-1">
-                  Creator Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  list="creators-datalist"
-                  placeholder="e.g. Sora Takahashi"
-                  value={addForm.creatorName}
-                  onChange={(e) => setAddForm((prev) => ({ ...prev, creatorName: e.target.value }))}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] placeholder:text-[#8A8A85] focus:outline-none focus:border-[#B8532F] focus:ring-1 focus:ring-[#B8532F]"
-                />
-                <datalist id="creators-datalist">
-                  {distinctCreators.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-[#141413] mb-1">
-                  Primary Medium / Category *
-                </label>
-                <input
-                  type="text"
-                  required
-                  list="media-datalist"
-                  placeholder="e.g. Cast Bronze & Acoustic Transducer"
-                  value={addForm.medium}
-                  onChange={(e) => setAddForm((prev) => ({ ...prev, medium: e.target.value }))}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] placeholder:text-[#8A8A85] focus:outline-none focus:border-[#B8532F] focus:ring-1 focus:ring-[#B8532F]"
-                />
-                <datalist id="media-datalist">
-                  {distinctMedia.map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Input
-                label="Physical Dimensions"
-                placeholder="e.g. 120 x 85 x 40 cm"
-                value={addForm.dimensions}
-                onChange={(e) => setAddForm((prev) => ({ ...prev, dimensions: e.target.value }))}
-              />
-              <Input
-                label="Price (USD)"
-                type="number"
-                placeholder="e.g. 6800"
-                value={addForm.price}
-                onChange={(e) => setAddForm((prev) => ({ ...prev, price: e.target.value }))}
-              />
-            </div>
-
-            <Input
-              label="Artwork Image URL *"
-              required
-              placeholder="https://images.unsplash.com/..."
-              value={addForm.imageUrl}
-              onChange={(e) => setAddForm((prev) => ({ ...prev, imageUrl: e.target.value }))}
-            />
-
-            {/* Quick Image Preview */}
-            {addForm.imageUrl && (
-              <div className="relative aspect-16/9 w-full rounded-lg overflow-hidden border border-[#E8E8E3] bg-[#ECECE7]">
-                <img
-                  src={addForm.imageUrl}
-                  alt="Preview"
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = "none";
-                  }}
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-medium text-[#141413] mb-1">
-                Initial Publication Status
-              </label>
-              <select
-                value={addForm.status}
-                onChange={(e) =>
-                  setAddForm((prev) => ({
-                    ...prev,
-                    status: e.target.value as ArtworkStatus,
-                  }))
-                }
-                className="w-full text-xs px-3 py-2 rounded-lg border border-[#E8E8E3] bg-white text-[#141413] focus:outline-none focus:border-[#B8532F]"
-              >
-                <option value="published">Published (Immediately available)</option>
-                <option value="pending">Pending Curatorial Review</option>
-                <option value="draft">Draft (Restricted view)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E8E8E3]">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsAddModalOpen(false)}
-              disabled={isAdding}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              isLoading={isAdding}
-              leftIcon={<Plus className="w-3.5 h-3.5" />}
-            >
-              Add Artwork
-            </Button>
-          </div>
-        </form>
+        <ArtworkUploadForm
+          mode="admin"
+          creators={creators}
+          onSuccess={(newArtwork) => {
+            setArtworks((prev) => [newArtwork, ...prev]);
+            setIsAddModalOpen(false);
+          }}
+          onCancel={() => setIsAddModalOpen(false)}
+        />
       </Modal>
 
       {/* ========================================================================= */}

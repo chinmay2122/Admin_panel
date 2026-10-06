@@ -189,6 +189,13 @@ export const artworksRepo = {
     price?: number;
     imageUrl?: string;
     status?: ArtworkStatus;
+    year?: string;
+    location?: string;
+    collection?: string;
+    description?: string;
+    priceVisibility?: string;
+    availability?: string;
+    additionalImages?: string[];
   }): Promise<Artwork> {
     const supabase = getSupabaseAdmin();
     if (supabase && data.creatorId) {
@@ -204,6 +211,15 @@ export const artworksRepo = {
           status: toSupabaseStatus(data.status),
           is_published: data.status === "published",
         };
+
+        if (data.year) payload.year = data.year;
+        if (data.location) payload.location = data.location;
+        if (data.collection) payload.collection = data.collection;
+        if (data.description) payload.description = data.description;
+        if (data.priceVisibility) payload.price_visibility = data.priceVisibility;
+        if (data.additionalImages && data.additionalImages.length > 0) {
+          payload.additional_images = data.additionalImages;
+        }
 
         const { data: created, error } = await (supabase.from("artworks") as any)
           .insert(payload)
@@ -229,6 +245,11 @@ export const artworksRepo = {
       imageUrl: data.imageUrl || "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
       status: data.status || "published",
       createdAt: new Date().toISOString(),
+      year: data.year || new Date().getFullYear().toString(),
+      location: data.location,
+      collection: data.collection,
+      description: data.description,
+      availability: data.availability || (data.status === "published" ? "Available" : "Not for sale"),
     };
 
     artworksStore.unshift(newArtwork);
@@ -252,6 +273,11 @@ export const artworksRepo = {
         if (data.imageUrl !== undefined) payload.image_url = data.imageUrl;
         if (data.dimensions !== undefined) payload.dimensions = data.dimensions;
         if (data.medium !== undefined) payload.art_type = data.medium;
+        if (data.year !== undefined) payload.year = data.year;
+        if (data.location !== undefined) payload.location = data.location;
+        if (data.collection !== undefined) payload.collection = data.collection;
+        if (data.description !== undefined) payload.description = data.description;
+        if (data.availability !== undefined) payload.availability = data.availability;
 
         if (data.isFeatured !== undefined) {
           const { data: existing } = await supabase.from("artworks").select("tags").eq("id", id).maybeSingle();
