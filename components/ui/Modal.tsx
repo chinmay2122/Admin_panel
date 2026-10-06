@@ -63,9 +63,9 @@ export function Modal({
 
       {/* Modal Container */}
       <div
-        className={`relative w-full ${maxWidthMap[maxWidth]} bg-white border border-[#E8E8E3] rounded-lg shadow-sm overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-150`}
+        className={`relative flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] w-full ${maxWidthMap[maxWidth]} bg-white border border-[#E8E8E3] rounded-lg shadow-sm z-10 animate-in fade-in zoom-in-95 duration-150`}
       >
-        <div className="flex items-start justify-between p-5 border-b border-[#E8E8E3]">
+        <div className="flex items-start justify-between p-5 border-b border-[#E8E8E3] shrink-0">
           <div>
             {title && (
               <h3 className="text-base font-medium tracking-tight text-[#141413]">
@@ -87,10 +87,10 @@ export function Modal({
           </button>
         </div>
 
-        <div className="p-5">{children}</div>
+        <div className="p-5 overflow-y-auto min-h-0">{children}</div>
 
         {footer && (
-          <div className="px-5 py-4 bg-[#FAFAF8] border-t border-[#E8E8E3] flex items-center justify-end gap-2.5">
+          <div className="px-5 py-4 bg-[#FAFAF8] border-t border-[#E8E8E3] flex items-center justify-end gap-2.5 shrink-0">
             {footer}
           </div>
         )}
