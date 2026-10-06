@@ -20,7 +20,7 @@ export interface SidebarCounts {
 
 export async function getAdminSidebarCountsAction(): Promise<{ success: boolean; counts?: SidebarCounts; error?: string }> {
   try {
-    await requireAdminSession("user:view");
+    await requireAdminSession("user:view_all");
 
     // We can fetch lists and filter, or if there's a count method, use it.
     // Assuming we have to list and then check length to be safe since we don't know if repos have .count()
