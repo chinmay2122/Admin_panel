@@ -72,7 +72,7 @@ export function ExportDropdown({ exportType, filters }: ExportDropdownProps) {
       ) : (
         <Download className="w-3.5 h-3.5 text-[#6E6E69]" />
       )}
-      <span>{isExporting ? (exportType === "artworks" ? "Preparing zip..." : "Preparing CSV...") : "Download CSV"}</span>
+      <span>{isExporting ? "Preparing CSV..." : "Download CSV"}</span>
     </button>
   );
 }

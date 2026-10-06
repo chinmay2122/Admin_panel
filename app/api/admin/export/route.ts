@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
-import { artworksRepo, creatorsRepo, collectorsRepo, reportsRepo, corRepo, corRequestsRepo, corOpportunitiesRepo, corApplicationsRepo } from "@/lib/data";
-import JSZip from "jszip";
-import { hasPermission } from "@/lib/security/rbac";
+import {
+  usersRepo,
+  artworksRepo,
+  creatorsRepo,
+  collectorsRepo,
+  reportsRepo,
+  corRepo,
+  corRequestsRepo,
+  corOpportunitiesRepo,
+  corApplicationsRepo,
+  inquiriesRepo,
+} from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -10,23 +19,30 @@ async function verifyAdminAuth(req: NextRequest) {
   const token = req.cookies.get(AUTH_COOKIE_NAME)?.value;
   const session = await verifySessionToken(token);
   if (!session) return { error: "Unauthorized", status: 401 };
-  if (!hasPermission(session.role, "analytics:view") && session.role !== "admin" && session.role !== "super_admin") {
-    // If they aren't admin, deny access. Depending on RBAC.
-    // We will loosely allow 'analytics:view' or 'admin'.
-  }
   return { session };
 }
 
-function escapeCsvCell(str: any) {
-  if (str == null) return '""';
+function escapeCsvCell(str: any): string {
+  if (str == null || str === undefined) return '""';
+  if (typeof str === "boolean") return str ? '"Yes"' : '"No"';
+  if (typeof str === "number") return `"${str}"`;
+  if (Array.isArray(str)) {
+    const joined = str.join("; ").replace(/"/g, '""');
+    return `"${joined}"`;
+  }
+  if (typeof str === "object") {
+    const strObj = JSON.stringify(str).replace(/"/g, '""');
+    return `"${strObj}"`;
+  }
   const val = String(str).replace(/"/g, '""');
   return `"${val}"`;
 }
 
-function convertToCsv(data: any[], columns: { header: string; key: (row: any) => any }[]) {
-  const headers = columns.map(c => escapeCsvCell(c.header)).join(",");
-  const rows = data.map(row => columns.map(col => escapeCsvCell(col.key(row))).join(","));
-  return [headers, ...rows].join("\n");
+function convertToCsv(data: any[], columns: { header: string; key: (row: any) => any }[]): string {
+  const headers = columns.map((c) => escapeCsvCell(c.header)).join(",");
+  const rows = data.map((row) => columns.map((col) => escapeCsvCell(col.key(row))).join(","));
+  // Include UTF-8 BOM so Excel, Numbers, and Google Sheets correctly parse international characters and symbols
+  return "\uFEFF" + [headers, ...rows].join("\r\n");
 }
 
 export async function POST(req: NextRequest) {
@@ -40,204 +56,413 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid JSON request body." }, { status: 400 });
     }
 
     const { type, filters } = body;
-    if (!type) return NextResponse.json({ error: "Missing export type" }, { status: 400 });
+    if (!type) {
+      return NextResponse.json({ error: "Missing export type parameter." }, { status: 400 });
+    }
 
     const now = new Date().toISOString().split("T")[0];
 
-    // =============================
-    // ARTWORKS EXPORT
-    // =============================
-    if (type === "artworks") {
-      const artworks = await artworksRepo.list(filters);
-      if (artworks.length === 0) return NextResponse.json({ error: "No data available" }, { status: 404 });
+    // =========================================================================
+    // 1. USERS EXPORT
+    // =========================================================================
+    if (type === "users") {
+      const users = await usersRepo.list(filters);
+      if (users.length === 0) {
+        return NextResponse.json({ error: "No user accounts found matching criteria." }, { status: 404 });
+      }
 
       const columns = [
-        { header: "Artwork ID", key: (r: any) => r.id },
-        { header: "Artwork Title", key: (r: any) => r.title },
-        { header: "Creator", key: (r: any) => r.creatorName },
-        { header: "Medium", key: (r: any) => r.medium },
-        { header: "Dimensions", key: (r: any) => r.dimensions },
-        { header: "Year", key: (r: any) => r.year },
-        { header: "Location", key: (r: any) => r.location },
-        { header: "Collection", key: (r: any) => r.collection },
-        { header: "Price", key: (r: any) => r.price },
-        { header: "Availability", key: (r: any) => r.availability },
-        { header: "Status", key: (r: any) => r.status },
-        { header: "Featured", key: (r: any) => (r.isFeatured ? "Yes" : "No") },
-        { header: "Flagged", key: (r: any) => (r.isFlagged ? "Yes" : "No") },
-        { header: "Created Date", key: (r: any) => r.createdAt },
-        { header: "Artwork Image URL", key: (r: any) => r.imageUrl },
-        { header: "Artwork Image File", key: (r: any) => `images/${generateSafeFilename(r.title, r.id, r.imageUrl)}` },
+        { header: "User ID", key: (r: any) => r.id },
+        { header: "Full Name", key: (r: any) => r.name },
+        { header: "Email Address", key: (r: any) => r.email },
+        { header: "Account Role", key: (r: any) => (r.role === "creator" ? "Creator" : "Collector") },
+        { header: "Subscription Tier", key: (r: any) => (r.plan ? r.plan.toUpperCase() : "FREE") },
+        { header: "Account Status", key: (r: any) => (r.status === "active" ? "Active" : "Suspended") },
+        { header: "COR Member", key: (r: any) => (r.isCorMember ? "Yes" : "No") },
+        { header: "Registration Date", key: (r: any) => r.createdAt },
       ];
 
-      const csvContent = convertToCsv(artworks, columns);
-      
-      const zip = new JSZip();
-      zip.file("artworks.csv", csvContent);
-      const imagesFolder = zip.folder("images");
-
-      const fetchImage = async (url: string, filename: string) => {
-        try {
-          if (!url || url.startsWith('data:')) return;
-          const res = await fetch(url);
-          if (!res.ok) return;
-          const arrayBuffer = await res.arrayBuffer();
-          imagesFolder?.file(filename, arrayBuffer);
-        } catch (error) {
-          console.error("Failed to fetch image:", url, error);
-        }
-      };
-
-      // Promise.all with some concurrency limit could be better, but we do simple all here
-      await Promise.all(artworks.map(a => 
-        fetchImage(a.imageUrl, generateSafeFilename(a.title, a.id, a.imageUrl))
-      ));
-
-      const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "STORE" });
-
-      return new NextResponse(zipBuffer as unknown as BodyInit, {
+      const csvContent = convertToCsv(users, columns);
+      return new NextResponse(csvContent, {
         headers: {
-          "Content-Disposition": `attachment; filename="ERAS-Artworks-${now}.zip"`,
-          "Content-Type": "application/zip",
+          "Content-Disposition": `attachment; filename="ERAS-Users-${now}.csv"`,
+          "Content-Type": "text/csv; charset=utf-8",
         },
       });
     }
 
-    // =============================
-    // OTHER EXPORTS
-    // =============================
-    let data: any[] = [];
-    let columns: { header: string; key: (r: any) => any }[] = [];
-    let filename = `ERAS-Export-${now}.csv`;
+    // =========================================================================
+    // 2. COLLECTORS EXPORT
+    // =========================================================================
+    if (type === "collectors") {
+      const [collectors, allChats] = await Promise.all([
+        collectorsRepo.list(filters),
+        inquiriesRepo.listChats().catch(() => []),
+      ]);
 
-    if (type === "creators") {
-      data = await creatorsRepo.list(filters);
-      filename = `ERAS-Creators-${now}.csv`;
-      columns = [
-        { header: "ID", key: (r: any) => r.id },
-        { header: "Creator Name", key: (r: any) => r.name },
-        { header: "Email", key: (r: any) => r.email },
-        { header: "Phone", key: (r: any) => r.phone },
-        { header: "Location", key: (r: any) => r.location },
-        { header: "Specialisation", key: (r: any) => r.specialization },
-        { header: "Status", key: (r: any) => r.status },
-        { header: "Subscription", key: (r: any) => r.plan },
-        { header: "COR Member", key: (r: any) => (r.isCorMember ? "Yes" : "No") },
-        { header: "Joined Date", key: (r: any) => r.createdAt },
-      ];
-    } else if (type === "collectors" || type === "users") {
-      data = await collectorsRepo.list(filters);
-      filename = `ERAS-Collectors-${now}.csv`;
-      columns = [
-        { header: "ID", key: (r: any) => r.id },
+      if (collectors.length === 0) {
+        return NextResponse.json({ error: "No collectors found matching criteria." }, { status: 404 });
+      }
+
+      // Compute acquisition inquiries / interest count per collector
+      const inquiriesPerCollector = new Map<string, number>();
+      allChats.forEach((chat) => {
+        if (chat.guestId) {
+          inquiriesPerCollector.set(
+            chat.guestId,
+            (inquiriesPerCollector.get(chat.guestId) || 0) + 1
+          );
+        }
+      });
+
+      const columns = [
+        { header: "Collector ID", key: (r: any) => r.id },
         { header: "Collector Name", key: (r: any) => r.name },
-        { header: "Email", key: (r: any) => r.email },
-        { header: "Phone", key: (r: any) => r.phone },
-        { header: "Location", key: (r: any) => r.location },
-        { header: "Preferences", key: (r: any) => r.preferences },
-        { header: "Status", key: (r: any) => r.status },
-        { header: "Subscription", key: (r: any) => r.plan },
+        { header: "Email Address", key: (r: any) => r.email || "N/A" },
+        { header: "Phone Number", key: (r: any) => r.phoneNumber || "N/A" },
+        { header: "Location", key: (r: any) => r.location || "N/A" },
+        { header: "About / Bio", key: (r: any) => r.aboutMe || "N/A" },
+        { header: "Art Preferences", key: (r: any) => r.preferences || "Various" },
+        {
+          header: "Inquiries / Interests Shown",
+          key: (r: any) => inquiriesPerCollector.get(r.id) || inquiriesPerCollector.get(r.userId) || 0,
+        },
+        { header: "Subscription Tier", key: (r: any) => (r.plan ? r.plan.toUpperCase() : "FREE") },
+        { header: "Account Status", key: (r: any) => (r.status === "active" ? "Active" : "Suspended") },
         { header: "Joined Date", key: (r: any) => r.createdAt },
       ];
-    } else if (type === "reports") {
-      data = await reportsRepo.list(filters);
-      filename = `ERAS-Reports-${now}.csv`;
-      columns = [
+
+      const csvContent = convertToCsv(collectors, columns);
+      return new NextResponse(csvContent, {
+        headers: {
+          "Content-Disposition": `attachment; filename="ERAS-Collectors-${now}.csv"`,
+          "Content-Type": "text/csv; charset=utf-8",
+        },
+      });
+    }
+
+    // =========================================================================
+    // 3. CREATORS EXPORT
+    // =========================================================================
+    if (type === "creators") {
+      const [creators, allArtworks] = await Promise.all([
+        creatorsRepo.list(filters),
+        artworksRepo.list().catch(() => []),
+      ]);
+
+      if (creators.length === 0) {
+        return NextResponse.json({ error: "No creators found matching criteria." }, { status: 404 });
+      }
+
+      // Group artworks by creatorId and creatorName
+      const artworksByCreator = new Map<string, typeof allArtworks>();
+      allArtworks.forEach((art) => {
+        const keyId = art.creatorId;
+        const keyName = art.creatorName?.toLowerCase().trim();
+
+        if (keyId) {
+          const list = artworksByCreator.get(keyId) || [];
+          list.push(art);
+          artworksByCreator.set(keyId, list);
+        }
+        if (keyName) {
+          const list = artworksByCreator.get(keyName) || [];
+          list.push(art);
+          artworksByCreator.set(keyName, list);
+        }
+      });
+
+      const columns = [
+        { header: "Creator ID", key: (r: any) => r.id },
+        { header: "Artist / Creator Name", key: (r: any) => r.name },
+        { header: "Email Address", key: (r: any) => r.email || "N/A" },
+        { header: "Phone Number", key: (r: any) => r.phoneNumber || "N/A" },
+        { header: "Studio Location", key: (r: any) => r.location || "N/A" },
+        { header: "Primary Discipline", key: (r: any) => r.discipline || "Visual Arts" },
+        { header: "Artist Statement / Bio", key: (r: any) => r.aboutMe || "N/A" },
+        { header: "Portfolio Website", key: (r: any) => r.portfolioUrl || "N/A" },
+        {
+          header: "Social Links",
+          key: (r: any) =>
+            r.socialLinks ? Object.entries(r.socialLinks).map(([k, v]) => `${k}: ${v}`).join(", ") : "N/A",
+        },
+        { header: "Subscription Tier", key: (r: any) => (r.plan ? r.plan.toUpperCase() : "FREE") },
+        { header: "Account Status", key: (r: any) => (r.status === "active" ? "Active" : r.status || "Active") },
+        {
+          header: "Total Artworks Uploaded",
+          key: (r: any) => {
+            const arts = artworksByCreator.get(r.id) || artworksByCreator.get(r.name?.toLowerCase().trim()) || [];
+            return arts.length;
+          },
+        },
+        {
+          header: "Published Artworks Count",
+          key: (r: any) => {
+            const arts = artworksByCreator.get(r.id) || artworksByCreator.get(r.name?.toLowerCase().trim()) || [];
+            return arts.filter((a) => a.status === "published").length;
+          },
+        },
+        {
+          header: "Total Catalog Value (USD)",
+          key: (r: any) => {
+            const arts = artworksByCreator.get(r.id) || artworksByCreator.get(r.name?.toLowerCase().trim()) || [];
+            const sum = arts.reduce((acc, a) => acc + (a.price || 0), 0);
+            return `$${sum.toLocaleString()}`;
+          },
+        },
+        {
+          header: "Featured Artworks Count",
+          key: (r: any) => {
+            const arts = artworksByCreator.get(r.id) || artworksByCreator.get(r.name?.toLowerCase().trim()) || [];
+            return arts.filter((a) => a.isFeatured).length;
+          },
+        },
+        { header: "Joined Date", key: (r: any) => r.createdAt },
+      ];
+
+      const csvContent = convertToCsv(creators, columns);
+      return new NextResponse(csvContent, {
+        headers: {
+          "Content-Disposition": `attachment; filename="ERAS-Creators-${now}.csv"`,
+          "Content-Type": "text/csv; charset=utf-8",
+        },
+      });
+    }
+
+    // =========================================================================
+    // 4. ARTWORKS EXPORT
+    // =========================================================================
+    if (type === "artworks") {
+      const artworks = await artworksRepo.list(filters);
+      if (artworks.length === 0) {
+        return NextResponse.json({ error: "No artworks found matching criteria." }, { status: 404 });
+      }
+
+      const columns = [
+        { header: "Artwork ID", key: (r: any) => r.id },
+        { header: "Artwork Title", key: (r: any) => r.title },
+        { header: "Artist / Creator Name", key: (r: any) => r.creatorName },
+        { header: "Creator ID", key: (r: any) => r.creatorId || "N/A" },
+        { header: "Primary Medium / Category", key: (r: any) => r.medium },
+        { header: "Physical Dimensions", key: (r: any) => r.dimensions || "N/A" },
+        { header: "Year of Creation", key: (r: any) => r.year || "2026" },
+        { header: "Studio / Location", key: (r: any) => r.location || "N/A" },
+        { header: "Collection / Series", key: (r: any) => r.collection || "N/A" },
+        { header: "Curatorial Statement / Description", key: (r: any) => r.description || "N/A" },
+        { header: "Price (USD)", key: (r: any) => r.price || 0 },
+        { header: "Price Display Setting", key: (r: any) => (r.price > 0 ? "Show Price" : "Price on Request") },
+        { header: "Catalog Availability", key: (r: any) => r.availability || (r.status === "published" ? "Available" : "Not for sale") },
+        { header: "Publication Status", key: (r: any) => r.status },
+        { header: "Featured On Platform", key: (r: any) => (r.isFeatured ? "Yes" : "No") },
+        { header: "Flagged For Moderation", key: (r: any) => (r.isFlagged ? "Yes" : "No") },
+        { header: "Artwork Image URL", key: (r: any) => r.imageUrl },
+        { header: "Submitted / Created Date", key: (r: any) => r.createdAt },
+      ];
+
+      const csvContent = convertToCsv(artworks, columns);
+      return new NextResponse(csvContent, {
+        headers: {
+          "Content-Disposition": `attachment; filename="ERAS-Artworks-${now}.csv"`,
+          "Content-Type": "text/csv; charset=utf-8",
+        },
+      });
+    }
+
+    // =========================================================================
+    // 5. REPORTS & MODERATION EXPORT
+    // =========================================================================
+    if (type === "reports") {
+      const reports = await reportsRepo.list(filters);
+      if (reports.length === 0) {
+        return NextResponse.json({ error: "No moderation reports found matching criteria." }, { status: 404 });
+      }
+
+      const columns = [
         { header: "Report ID", key: (r: any) => r.id },
-        { header: "Reported Artwork", key: (r: any) => r.artworkTitle },
-        { header: "Artist", key: (r: any) => r.ownerName },
-        { header: "Reported By", key: (r: any) => r.reporterName },
-        { header: "Reason", key: (r: any) => r.reason },
-        { header: "Details", key: (r: any) => r.details },
-        { header: "Status", key: (r: any) => r.status },
-        { header: "Created Date", key: (r: any) => r.createdAt },
-        { header: "Resolved Date", key: (r: any) => r.resolvedAt },
+        { header: "Reported Artwork Title", key: (r: any) => r.artworkTitle || "Untitled" },
+        { header: "Artwork ID", key: (r: any) => r.artworkId || "N/A" },
+        { header: "Artwork Artist / Owner", key: (r: any) => r.ownerName || "Unknown Artist" },
+        { header: "Artist / Owner ID", key: (r: any) => r.artworkOwnerId || "N/A" },
+        { header: "Reported By", key: (r: any) => r.reporterName || "Community Member" },
+        { header: "Reporter User ID", key: (r: any) => r.reporterUserId || "N/A" },
+        { header: "Report Reason / Category", key: (r: any) => r.reason },
+        { header: "Report Details & Notes", key: (r: any) => r.details || "N/A" },
+        { header: "Moderation Status", key: (r: any) => r.status },
+        { header: "Moderation Action Taken", key: (r: any) => r.moderationAction || "None" },
+        { header: "Curatorial Note", key: (r: any) => r.moderationNote || "N/A" },
+        { header: "Resolved By (Admin ID)", key: (r: any) => r.resolvedBy || "N/A" },
+        { header: "Resolution Date", key: (r: any) => r.resolvedAt || "Pending" },
+        { header: "Submitted Date", key: (r: any) => r.createdAt },
       ];
-    } else if (type === "cor-members") {
-      data = await corRepo.list(filters);
-      filename = `ERAS-COR-Members-${now}.csv`;
-      columns = [
-        { header: "ID", key: (r: any) => r.id },
-        { header: "Creator", key: (r: any) => r.name },
-        { header: "Email", key: (r: any) => r.creatorEmail },
-        { header: "Career Strategy", key: (r: any) => r.careerStrategy },
-        { header: "Preferred Role", key: (r: any) => r.desiredRole },
-        { header: "Member Status", key: (r: any) => r.status },
+
+      const csvContent = convertToCsv(reports, columns);
+      return new NextResponse(csvContent, {
+        headers: {
+          "Content-Disposition": `attachment; filename="ERAS-Reports-${now}.csv"`,
+          "Content-Type": "text/csv; charset=utf-8",
+        },
+      });
+    }
+
+    // =========================================================================
+    // 6. COR MEMBERS EXPORT
+    // =========================================================================
+    if (type === "cor-members") {
+      const members = await corRepo.list(filters);
+      if (members.length === 0) {
+        return NextResponse.json({ error: "No COR members found matching criteria." }, { status: 404 });
+      }
+
+      const columns = [
+        { header: "Member ID", key: (r: any) => r.id },
+        { header: "Creator / User ID", key: (r: any) => r.creatorId || r.userId || "N/A" },
+        { header: "Creator Name", key: (r: any) => r.creatorName || r.name },
+        { header: "Email Address", key: (r: any) => r.creatorEmail || "N/A" },
+        { header: "Location", key: (r: any) => r.location || "N/A" },
+        { header: "Desired / Preferred Role", key: (r: any) => r.desiredRole || "N/A" },
+        { header: "Skills & Mediums", key: (r: any) => (Array.isArray(r.skills) ? r.skills.join(", ") : r.skills || "N/A") },
+        { header: "Experience (Years)", key: (r: any) => r.experienceYears || "N/A" },
+        { header: "Preferred Work Type", key: (r: any) => r.preferredWorkType || "N/A" },
+        { header: "Career Strategy & Notes", key: (r: any) => r.careerStrategy || r.internalNotes || "N/A" },
+        { header: "Membership Status", key: (r: any) => r.status },
+        { header: "Approved By", key: (r: any) => r.approvedBy || "Admin" },
+        { header: "Approval Date", key: (r: any) => r.approvedAt || r.joinedAt },
+        { header: "Active Applications", key: (r: any) => r.activeApplicationsCount || 0 },
         { header: "Joined Date", key: (r: any) => r.joinedAt },
-        { header: "Active Applications", key: (r: any) => r.activeApplicationsCount },
       ];
-    } else if (type === "cor-requests") {
-      data = await corRequestsRepo.list(filters);
-      filename = `ERAS-COR-Requests-${now}.csv`;
-      columns = [
-        { header: "ID", key: (r: any) => r.id },
-        { header: "Creator", key: (r: any) => r.creatorName },
-        { header: "Email", key: (r: any) => r.creatorEmail },
-        { header: "Career Goal", key: (r: any) => r.careerGoals?.desiredRole || r.desiredRole },
-        { header: "Preferred Role", key: (r: any) => r.desiredRole },
-        { header: "Experience", key: (r: any) => r.experienceYears },
-        { header: "Requested Date", key: (r: any) => r.createdAt },
-        { header: "Status", key: (r: any) => r.status },
-        { header: "Reviewed Date", key: (r: any) => r.approvedAt || r.declinedAt },
+
+      const csvContent = convertToCsv(members, columns);
+      return new NextResponse(csvContent, {
+        headers: {
+          "Content-Disposition": `attachment; filename="ERAS-COR-Members-${now}.csv"`,
+          "Content-Type": "text/csv; charset=utf-8",
+        },
+      });
+    }
+
+    // =========================================================================
+    // 7. COR REQUESTS EXPORT
+    // =========================================================================
+    if (type === "cor-requests") {
+      const requests = await corRequestsRepo.list(filters);
+      if (requests.length === 0) {
+        return NextResponse.json({ error: "No COR requests found matching criteria." }, { status: 404 });
+      }
+
+      const columns = [
+        { header: "Request ID", key: (r: any) => r.id },
+        { header: "Creator / User ID", key: (r: any) => r.creatorId || "N/A" },
+        { header: "Creator Name", key: (r: any) => r.creatorName },
+        { header: "Email Address", key: (r: any) => r.creatorEmail || "N/A" },
+        { header: "Phone Number", key: (r: any) => r.creatorPhone || "N/A" },
+        { header: "Location", key: (r: any) => r.location || "N/A" },
+        { header: "Portfolio URL", key: (r: any) => r.portfolioUrl || "N/A" },
+        { header: "Desired Role", key: (r: any) => r.careerGoals?.desiredRole || r.desiredRole || "N/A" },
+        { header: "Career Ambition / Statement", key: (r: any) => r.careerGoals?.fiveYearVision || r.statement || "N/A" },
+        { header: "Experience (Years)", key: (r: any) => r.experienceYears || "N/A" },
+        {
+          header: "Education Background",
+          key: (r: any) =>
+            r.education
+              ? `${r.education.degree || ""} ${r.education.institution ? "at " + r.education.institution : ""} (${r.education.year || ""})`.trim()
+              : "N/A",
+        },
+        { header: "Preferred Work Arrangement", key: (r: any) => r.preferredWorkType || "N/A" },
+        { header: "Key Skills", key: (r: any) => (Array.isArray(r.skills) ? r.skills.join(", ") : r.skills || "N/A") },
+        { header: "Application Status", key: (r: any) => r.status },
+        { header: "Reviewed By", key: (r: any) => r.approvedBy || r.declinedBy || "Pending Review" },
+        { header: "Reviewed Date", key: (r: any) => r.approvedAt || r.declinedAt || "Pending" },
+        { header: "Submission Date", key: (r: any) => r.createdAt },
       ];
-    } else if (type === "cor-opportunities") {
-      data = await corOpportunitiesRepo.list(filters);
-      filename = `ERAS-COR-Opportunities-${now}.csv`;
-      columns = [
-        { header: "ID", key: (r: any) => r.id },
-        { header: "Company", key: (r: any) => r.company },
-        { header: "Job Title", key: (r: any) => r.title },
+
+      const csvContent = convertToCsv(requests, columns);
+      return new NextResponse(csvContent, {
+        headers: {
+          "Content-Disposition": `attachment; filename="ERAS-COR-Requests-${now}.csv"`,
+          "Content-Type": "text/csv; charset=utf-8",
+        },
+      });
+    }
+
+    // =========================================================================
+    // 8. COR OPPORTUNITIES & COMMISSIONS EXPORT
+    // =========================================================================
+    if (type === "cor-opportunities") {
+      const opportunities = await corOpportunitiesRepo.list(filters);
+      if (opportunities.length === 0) {
+        return NextResponse.json({ error: "No opportunities found matching criteria." }, { status: 404 });
+      }
+
+      const columns = [
+        { header: "Opportunity ID", key: (r: any) => r.id },
+        { header: "Opportunity Title", key: (r: any) => r.title },
+        { header: "Company / Studio Name", key: (r: any) => r.company },
         { header: "Location", key: (r: any) => r.location },
-        { header: "Workplace", key: (r: any) => r.workplaceType },
-        { header: "Salary", key: (r: any) => r.salary },
-        { header: "Experience", key: (r: any) => r.experienceRequirement },
+        { header: "Workplace Type", key: (r: any) => r.workplaceType || "On-site" },
+        { header: "Employment / Commission Type", key: (r: any) => r.type || "Full-time" },
+        { header: "Compensation / Salary Range", key: (r: any) => r.salary || "Competitive" },
+        { header: "Experience Requirement", key: (r: any) => r.experienceRequirement || "N/A" },
+        { header: "Pro Exclusive Listing", key: (r: any) => (r.isProOnly ? "Yes" : "No") },
+        { header: "Description", key: (r: any) => r.description || "N/A" },
+        { header: "Requirements", key: (r: any) => r.requirements || "N/A" },
+        { header: "Listing Status", key: (r: any) => r.status },
+        { header: "Total Applications Received", key: (r: any) => r.applicantsCount || 0 },
         { header: "Created Date", key: (r: any) => r.createdAt },
-        { header: "Status", key: (r: any) => r.status },
       ];
-    } else if (type === "cor-applications") {
-      data = await corApplicationsRepo.list(filters);
-      filename = `ERAS-COR-Applications-${now}.csv`;
-      columns = [
-        { header: "ID", key: (r: any) => r.id },
-        { header: "Creator", key: (r: any) => r.creatorName },
-        { header: "Company", key: (r: any) => r.company },
-        { header: "Position", key: (r: any) => r.opportunityTitle },
-        { header: "Application Date", key: (r: any) => r.appliedDate },
-        { header: "Current Stage", key: (r: any) => r.status },
-        { header: "Interview Date", key: (r: any) => r.interviewDate },
-        { header: "Status", key: (r: any) => r.status },
-      ];
-    } else {
-      return NextResponse.json({ error: "Unknown export type" }, { status: 400 });
+
+      const csvContent = convertToCsv(opportunities, columns);
+      return new NextResponse(csvContent, {
+        headers: {
+          "Content-Disposition": `attachment; filename="ERAS-COR-Opportunities-${now}.csv"`,
+          "Content-Type": "text/csv; charset=utf-8",
+        },
+      });
     }
 
-    if (data.length === 0) {
-      return NextResponse.json({ error: "No data available for export" }, { status: 404 });
+    // =========================================================================
+    // 9. COR APPLICATIONS EXPORT
+    // =========================================================================
+    if (type === "cor-applications") {
+      const applications = await corApplicationsRepo.list(filters);
+      if (applications.length === 0) {
+        return NextResponse.json({ error: "No applications found matching criteria." }, { status: 404 });
+      }
+
+      const columns = [
+        { header: "Application ID", key: (r: any) => r.id },
+        { header: "Opportunity ID", key: (r: any) => r.opportunityId || r.jobId || "N/A" },
+        { header: "Position / Opportunity Title", key: (r: any) => r.opportunityTitle || r.jobTitle || "Untitled" },
+        { header: "Company / Studio", key: (r: any) => r.company || "N/A" },
+        { header: "Candidate / Creator ID", key: (r: any) => r.creatorId || r.candidateId || "N/A" },
+        { header: "Candidate Name", key: (r: any) => r.creatorName || r.candidateName || "Candidate" },
+        { header: "Candidate Email", key: (r: any) => r.creatorEmail || r.email || "N/A" },
+        { header: "Cover Letter / Statement", key: (r: any) => r.coverLetter || "N/A" },
+        { header: "Portfolio Link", key: (r: any) => r.portfolioUrl || "N/A" },
+        { header: "Resume / CV Document Link", key: (r: any) => r.resumeUrl || "N/A" },
+        { header: "Current Stage / Status", key: (r: any) => r.status },
+        { header: "Interview Date", key: (r: any) => r.interviewDate || "N/A" },
+        { header: "Submission Date", key: (r: any) => r.appliedDate || r.appliedAt || r.createdAt },
+      ];
+
+      const csvContent = convertToCsv(applications, columns);
+      return new NextResponse(csvContent, {
+        headers: {
+          "Content-Disposition": `attachment; filename="ERAS-COR-Applications-${now}.csv"`,
+          "Content-Type": "text/csv; charset=utf-8",
+        },
+      });
     }
 
-    const csvContent = convertToCsv(data, columns);
-    
-    return new NextResponse(csvContent, {
-      headers: {
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Type": "text/csv; charset=utf-8",
-      },
-    });
-
+    return NextResponse.json({ error: `Unsupported export type '${type}'.` }, { status: 400 });
   } catch (err: any) {
     console.error("Export error:", err);
-    return NextResponse.json({ error: "Export failed", details: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to generate CSV export.", details: err.message },
+      { status: 500 }
+    );
   }
-}
-
-function generateSafeFilename(title: string, id: string, url: string): string {
-  const safeTitle = (title || "artwork").replace(/[^a-z0-9]/gi, "-").toLowerCase();
-  const shortId = id.split("-")[0] || id.substring(0, 8);
-  const extMatch = url.match(/\.(jpg|jpeg|png|webp|gif)/i);
-  const ext = extMatch ? extMatch[1].toLowerCase() : "jpg";
-  return `${safeTitle}-${shortId}.${ext}`;
 }
