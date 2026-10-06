@@ -40,6 +40,7 @@ import {
 import {
   dismissReportAction,
   resolveReportAction,
+  reopenReportAction,
   hideArtworkModerationAction,
   unhideArtworkModerationAction,
   removeArtworkModerationAction,
@@ -433,11 +434,36 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
     }
   };
 
+  // 6. REOPEN REPORT (MOVE TO PENDING)
+  const handleReopenDirect = async (rep: Report) => {
+    setIsActionLoading(true);
+    const previous = [...reports];
+    const updated = reports.map((r) =>
+      r.id === rep.id ? { ...r, status: "pending" as const, moderationAction: undefined } : r
+    );
+    setReports(updated);
+    if (selectedReport?.id === rep.id) {
+      setSelectedReport({ ...selectedReport, status: "pending", moderationAction: undefined });
+    }
+
+    try {
+      const res = await reopenReportAction(rep.id);
+      if (!res.success) {
+        setReports(previous);
+        toast.error("Failed to reopen report", res.error || "Please try again.");
+      } else {
+        toast.success("Report Reopened", `Report on "${rep.artworkTitle}" moved back to pending.`);
+      }
+    } catch {
+      setReports(previous);
+      toast.error("Network error", "Could not reopen report.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-16 animate-in fade-in duration-150">
-      {/* ========================================================================= */}
-      {/* 1. PAGE HEADER (ERAS Studio Editorial Style)                              */}
-      {/* ========================================================================= */}
       {/* ========================================================================= */}
       {/* 1. PAGE HEADER (ERAS Studio Editorial Style)                              */}
       {/* ========================================================================= */}
@@ -454,7 +480,7 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. REPORT FILTER TABS & SEARCH                                            */}
+      {/* 2. REPORT FILTER TABS & SEARCH                                            */}
       {/* ========================================================================= */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-1">
         {/* Tabs */}
@@ -478,7 +504,7 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                     : "text-[#6E6E69] hover:text-[#141413] hover:bg-neutral-100"
                 }`}
               >
-                {label} {count > 0 && <span className="opacity-75">({count})</span>}
+                {label} <span className="opacity-75">({count})</span>
               </button>
             );
           })}
@@ -641,7 +667,7 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                         </button>
 
                         {activeDropdownId === rep.id && (
-                          <div className="absolute right-0 mt-1.5 w-44 rounded-xl bg-white border border-[#E8E8E3] shadow-lg py-1.5 z-50 text-left">
+                          <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-white border border-[#E8E8E3] shadow-lg py-1.5 z-50 text-left">
                             <button
                               type="button"
                               onClick={() => {
@@ -654,58 +680,76 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                               <span>View Details</span>
                             </button>
 
-                            {rep.status === "pending" && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveDropdownId(null);
-                                    handleResolveDirect(rep);
-                                  }}
-                                  className="w-full px-3.5 py-2 text-xs text-[#141413] hover:bg-green-50 hover:text-green-700 flex items-center gap-2 cursor-pointer transition-colors"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                                  <span>Mark Resolved</span>
-                                </button>
+                            {/* Mark Resolved */}
+                            {rep.status !== "resolved" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveDropdownId(null);
+                                  handleResolveDirect(rep);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs text-[#141413] hover:bg-green-50 hover:text-green-700 flex items-center gap-2 cursor-pointer transition-colors"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                                <span>Mark Resolved</span>
+                              </button>
+                            )}
 
-                                {rep.moderationAction === "artwork_hidden" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveDropdownId(null);
-                                      handleConfirmUnhide(rep);
-                                    }}
-                                    className="w-full px-3.5 py-2 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer transition-colors"
-                                  >
-                                    <Eye className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Revert Hide (Unhide)</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setActiveDropdownId(null);
-                                      setHideTarget(rep);
-                                    }}
-                                    className="w-full px-3.5 py-2 text-xs text-[#141413] hover:bg-neutral-100 flex items-center gap-2 cursor-pointer transition-colors"
-                                  >
-                                    <EyeOff className="w-3.5 h-3.5 text-[#6E6E69]" />
-                                    <span>Hide Content</span>
-                                  </button>
-                                )}
+                            {/* Reopen to Pending */}
+                            {rep.status !== "pending" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveDropdownId(null);
+                                  handleReopenDirect(rep);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs text-[#141413] hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2 cursor-pointer transition-colors"
+                              >
+                                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Reopen (Pending)</span>
+                              </button>
+                            )}
 
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveDropdownId(null);
-                                    setDismissTarget(rep);
-                                  }}
-                                  className="w-full px-3.5 py-2 text-xs text-[#141413] hover:bg-neutral-100 flex items-center gap-2 cursor-pointer transition-colors"
-                                >
-                                  <XCircle className="w-3.5 h-3.5 text-[#6E6E69]" />
-                                  <span>Dismiss</span>
-                                </button>
-                              </>
+                            {/* Hide / Revert Hide */}
+                            {rep.moderationAction === "artwork_hidden" ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveDropdownId(null);
+                                  handleConfirmUnhide(rep);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer transition-colors"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Revert Hide (Unhide)</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveDropdownId(null);
+                                  setHideTarget(rep);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs text-[#141413] hover:bg-neutral-100 flex items-center gap-2 cursor-pointer transition-colors"
+                              >
+                                <EyeOff className="w-3.5 h-3.5 text-[#6E6E69]" />
+                                <span>Hide Content</span>
+                              </button>
+                            )}
+
+                            {/* Dismiss */}
+                            {rep.status !== "dismissed" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveDropdownId(null);
+                                  setDismissTarget(rep);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs text-[#141413] hover:bg-neutral-100 flex items-center gap-2 cursor-pointer transition-colors"
+                              >
+                                <XCircle className="w-3.5 h-3.5 text-[#6E6E69]" />
+                                <span>Dismiss</span>
+                              </button>
                             )}
 
                             <div className="border-t border-[#F0F0EB] my-1" />
@@ -785,17 +829,32 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
         footer={
           selectedReport && (
             <div className="flex flex-wrap items-center justify-between gap-2 w-full">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setDismissTarget(selectedReport);
-                  setIsDrawerOpen(false);
-                }}
-              >
-                Dismiss
-              </Button>
-              <div className="flex items-center gap-2">
+              {selectedReport.status !== "dismissed" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDismissTarget(selectedReport);
+                    setIsDrawerOpen(false);
+                  }}
+                >
+                  Dismiss
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                  onClick={() => {
+                    handleReopenDirect(selectedReport);
+                    setIsDrawerOpen(false);
+                  }}
+                >
+                  Reopen (Pending)
+                </Button>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2">
                 {selectedReport.moderationAction === "artwork_hidden" ? (
                   <Button
                     variant="outline"
@@ -819,7 +878,8 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                     Hide Content
                   </Button>
                 )}
-                {selectedReport.moderationAction === "user_suspended" && (
+
+                {selectedReport.moderationAction === "user_suspended" ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -830,7 +890,20 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                   >
                     Revert Suspension
                   </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => {
+                      setSuspendTarget(selectedReport);
+                      setIsDrawerOpen(false);
+                    }}
+                  >
+                    Suspend User
+                  </Button>
                 )}
+
                 <Button
                   variant="danger"
                   size="sm"
@@ -841,16 +914,30 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
                 >
                   Remove Artwork
                 </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    handleResolveDirect(selectedReport);
-                    setIsDrawerOpen(false);
-                  }}
-                >
-                  Mark Resolved
-                </Button>
+
+                {selectedReport.status !== "resolved" ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      handleResolveDirect(selectedReport);
+                      setIsDrawerOpen(false);
+                    }}
+                  >
+                    Mark Resolved
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      handleReopenDirect(selectedReport);
+                      setIsDrawerOpen(false);
+                    }}
+                  >
+                    Reopen Report
+                  </Button>
+                )}
               </div>
             </div>
           )

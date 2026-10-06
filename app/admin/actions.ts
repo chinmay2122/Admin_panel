@@ -920,6 +920,55 @@ export async function resolveReportAction(
 }
 
 /**
+ * Reopen Report: Enforces 'report:resolve' permission and sets status back to 'pending'
+ */
+export async function reopenReportAction(
+  reportId: string,
+  note?: string
+): Promise<{ success: boolean; report?: Report; error?: string }> {
+  try {
+    const session = await requireAdminSession("report:resolve");
+
+    if (!isValidId(reportId)) {
+      return { success: false, error: "Invalid report ID format." };
+    }
+
+    const currentReport = await reportsRepo.getById(reportId);
+    if (!currentReport) {
+      return { success: false, error: "Report not found." };
+    }
+
+    const cleanNote = (note || "Report reopened to pending review.").trim().slice(0, 1000);
+
+    const report = await reportsRepo.updateStatus(
+      reportId,
+      "pending",
+      session.id,
+      undefined,
+      cleanNote
+    );
+
+    if (!report) {
+      return { success: false, error: "Failed to update report status." };
+    }
+
+    await reportsRepo.logAudit({
+      reportId,
+      artworkId: report.artworkId,
+      targetUserId: report.artworkOwnerId,
+      adminId: session.id,
+      action: "report_created",
+      note: cleanNote,
+    });
+
+    return { success: true, report };
+  } catch (err: any) {
+    console.error("reopenReportAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to reopen report.") };
+  }
+}
+
+/**
  * Hide Artwork: Enforces 'artwork:hide' permission, artwork verification, and audit logging
  */
 export async function hideArtworkModerationAction(

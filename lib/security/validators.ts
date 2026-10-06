@@ -46,21 +46,11 @@ export function isValidReportStateTransition(
   currentStatus: ReportStatus,
   targetStatus: ReportStatus
 ): { valid: boolean; error?: string } {
-  if (currentStatus === targetStatus) {
-    return { valid: false, error: `Report is already marked as ${targetStatus}.` };
-  }
-
-  if (currentStatus !== "pending") {
+  const allowedStatuses: ReportStatus[] = ["pending", "resolved", "dismissed"];
+  if (!allowedStatuses.includes(targetStatus)) {
     return {
       valid: false,
-      error: `Illegal state transition: Cannot change status of an already ${currentStatus} report.`,
-    };
-  }
-
-  if (targetStatus !== "resolved" && targetStatus !== "dismissed") {
-    return {
-      valid: false,
-      error: `Invalid target status '${targetStatus}'. Allowed: 'resolved' or 'dismissed'.`,
+      error: `Invalid target status '${targetStatus}'. Allowed: 'pending', 'resolved', or 'dismissed'.`,
     };
   }
 
