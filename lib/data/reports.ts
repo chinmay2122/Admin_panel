@@ -50,7 +50,7 @@ export const reportsRepo = {
       try {
         let query = supabase
           .from("reports")
-          .select("id, artwork_id, reporter_user_id, artwork_owner_id, reason, details, status, moderation_action, moderation_note, resolved_by, resolved_at, created_at, updated_at, artwork:artworks(id, title, image_url, art_type, dimensions, price, status, artist_name, creator_id), reporter:profiles!reporter_user_id(id, full_name, email, role), owner:profiles!artwork_owner_id(id, full_name, email, role)");
+          .select("id, artwork_id, reporter_user_id, artwork_owner_id, reason, details, status, moderation_action, moderation_note, resolved_by, resolved_at, created_at, updated_at, artwork:artworks(id, title, image_url, art_type, dimensions, price, status, artist_name, creator_id), reporter:profiles!reports_reporter_user_id_fkey(id, full_name, email, role), owner:profiles!reports_artwork_owner_id_fkey(id, full_name, email, role)");
 
         if (filters?.status && filters.status !== "all") {
           query = query.eq("status", filters.status);
@@ -130,7 +130,7 @@ export const reportsRepo = {
       try {
         const { data, error } = await supabase
           .from("reports")
-          .select("id, artwork_id, reporter_user_id, artwork_owner_id, reason, details, status, moderation_action, moderation_note, resolved_by, resolved_at, created_at, updated_at, artwork:artworks(id, title, image_url, art_type, dimensions, price, status, artist_name, creator_id), reporter:profiles!reporter_user_id(id, full_name, email, role), owner:profiles!artwork_owner_id(id, full_name, email, role)")
+          .select("id, artwork_id, reporter_user_id, artwork_owner_id, reason, details, status, moderation_action, moderation_note, resolved_by, resolved_at, created_at, updated_at, artwork:artworks(id, title, image_url, art_type, dimensions, price, status, artist_name, creator_id), reporter:profiles!reports_reporter_user_id_fkey(id, full_name, email, role), owner:profiles!reports_artwork_owner_id_fkey(id, full_name, email, role)")
           .eq("id", id)
           .maybeSingle();
 
@@ -207,7 +207,7 @@ export const reportsRepo = {
 
         const { data: created, error } = await (supabase.from("reports") as any)
           .insert(payload)
-          .select("*, artwork:artworks(*), reporter:profiles!reporter_user_id(*), owner:profiles!artwork_owner_id(*)")
+          .select("*, artwork:artworks(*), reporter:profiles!reports_reporter_user_id_fkey(*), owner:profiles!reports_artwork_owner_id_fkey(*)")
           .single();
 
         if (!error && created) {
@@ -287,7 +287,7 @@ export const reportsRepo = {
         const { data: updated, error } = await (supabase.from("reports") as any)
           .update(payload)
           .eq("id", id)
-          .select("*, artwork:artworks(*), reporter:profiles!reporter_user_id(*), owner:profiles!artwork_owner_id(*)")
+          .select("*, artwork:artworks(*), reporter:profiles!reports_reporter_user_id_fkey(*), owner:profiles!reports_artwork_owner_id_fkey(*)")
           .single();
 
         if (!error && updated) {
