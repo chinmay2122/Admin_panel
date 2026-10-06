@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useMemo, useEffect } from "react";
 import { Search, X, Users, ChevronDown } from "lucide-react";
@@ -6,6 +6,7 @@ import { Subscriber, SubscriptionStats } from "@/lib/data/subscriptions";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Pagination } from "@/components/ui/Pagination";
 import { useToast } from "@/components/ui";
+import { updateUserAction } from "@/app/admin/actions";
 import {
   Table,
   TableHeader,
@@ -115,29 +116,69 @@ export function SubscriptionsClient({ initialSubscribers, stats }: Subscriptions
     return filtered.slice(start, start + pageSize);
   }, [filtered, currentPage, pageSize]);
 
-  const handleSuspend = (sub: Subscriber) => {
+  const handleSuspend = async (sub: Subscriber) => {
+    const previous = [...subscribers];
     const next = subscribers.map((s) =>
       s.id === sub.id ? { ...s, status: "suspended" as const } : s
     );
     setSubscribers(next);
-    toast.success("User suspended", `${sub.name}'s account has been suspended.`);
+
+    try {
+      const res = await updateUserAction(sub.id, { status: "suspended" });
+      if (!res.success) {
+        setSubscribers(previous);
+        toast.error("Failed to suspend user", res.error || "Please try again.");
+      } else {
+        toast.success("User suspended", `${sub.name}'s account has been suspended.`);
+      }
+    } catch {
+      setSubscribers(previous);
+      toast.error("Network error", "Could not complete status update.");
+    }
   };
 
-  const handleCancelToFree = (sub: Subscriber) => {
+  const handleCancelToFree = async (sub: Subscriber) => {
+    const previous = [...subscribers];
     const next = subscribers.map((s) =>
       s.id === sub.id ? { ...s, plan: "free" as const } : s
     );
     setSubscribers(next);
-    toast.success("Plan changed", `${sub.name} has been moved to the Free plan.`);
+
+    try {
+      const res = await updateUserAction(sub.id, { plan: "free" });
+      if (!res.success) {
+        setSubscribers(previous);
+        toast.error("Failed to update plan", res.error || "Please try again.");
+      } else {
+        toast.success("Plan changed", `${sub.name} has been moved to the Free plan.`);
+      }
+    } catch {
+      setSubscribers(previous);
+      toast.error("Network error", "Could not complete plan update.");
+    }
   };
 
-  const handlePlanChange = (sub: Subscriber, newPlan: string) => {
+  const handlePlanChange = async (sub: Subscriber, newPlan: string) => {
     setActivePlanDropdownId(null);
+    const normalizedPlan = newPlan.toLowerCase() as "free" | "pro" | "elite";
+    const previous = [...subscribers];
     const next = subscribers.map((s) =>
-      s.id === sub.id ? { ...s, plan: newPlan as any } : s
+      s.id === sub.id ? { ...s, plan: normalizedPlan } : s
     );
     setSubscribers(next);
-    toast.success("Plan updated", `${sub.name} is now on the ${newPlan} plan.`);
+
+    try {
+      const res = await updateUserAction(sub.id, { plan: normalizedPlan });
+      if (!res.success) {
+        setSubscribers(previous);
+        toast.error("Failed to update plan", res.error || "Please try again.");
+      } else {
+        toast.success("Plan updated", `${sub.name} is now on the ${newPlan} plan.`);
+      }
+    } catch {
+      setSubscribers(previous);
+      toast.error("Network error", "Could not complete plan update.");
+    }
   };
 
   const tabs: { key: PlanFilter; label: string }[] = [

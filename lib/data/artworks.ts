@@ -13,15 +13,21 @@ function toSupabaseStatus(status?: string): "Available" | "For Sale" | "Not for 
   return "Available";
 }
 
-function fromSupabaseStatus(status?: string): ArtworkStatus {
-  if (!status) return "published";
-  const s = status.toLowerCase().trim();
-  if (s === "available" || s === "for sale" || s === "sold") return "published";
-  if (s === "not for sale") return "draft";
-  return (status as any) || "published";
+function fromSupabaseStatus(row: any): ArtworkStatus {
+  if (row?.is_published === false) return "draft";
+  const s = (row?.status || "").toLowerCase().trim();
+  if (s === "published" || s === "available" || s === "for sale" || s === "sold") return "published";
+  if (s === "not for sale" || s === "draft") return "draft";
+  if (s === "pending") return "pending";
+  if (s === "rejected") return "rejected";
+  return "published";
 }
 
 function mapFromSupabase(row: any): Artwork {
+  const isFeatured = Boolean(
+    row.is_featured ?? (Array.isArray(row.tags) && row.tags.includes("featured"))
+  );
+
   return {
     id: row.id,
     title: row.title || "Untitled",
@@ -31,15 +37,15 @@ function mapFromSupabase(row: any): Artwork {
     dimensions: row.dimensions || "Dimensions unavailable",
     price: Number(row.price) || 0,
     imageUrl: row.image_url || "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800",
-    status: fromSupabaseStatus(row.status),
+    status: fromSupabaseStatus(row),
     createdAt: row.created_at || new Date().toISOString(),
     description: row.description || "",
     year: row.year ? String(row.year) : undefined,
     location: row.location || undefined,
     collection: row.collection || undefined,
     availability: row.availability || (row.status === "Sold" ? "Sold" : "Available"),
-    isFeatured: row.is_featured ?? false,
-    isFlagged: row.is_flagged ?? false,
+    isFeatured,
+    isFlagged: row.is_flagged ?? (Array.isArray(row.tags) && row.tags.includes("flagged")),
   };
 }
 
@@ -239,10 +245,24 @@ export const artworksRepo = {
         const payload: Record<string, any> = {};
         if (data.title !== undefined) payload.title = data.title;
         if (data.price !== undefined) payload.price = data.price;
-        if (data.status !== undefined) payload.status = toSupabaseStatus(data.status);
+        if (data.status !== undefined) {
+          payload.status = toSupabaseStatus(data.status);
+          payload.is_published = !(data.status === "draft" || data.status === "rejected" || (data.status as string) === "Not for sale");
+        }
         if (data.imageUrl !== undefined) payload.image_url = data.imageUrl;
         if (data.dimensions !== undefined) payload.dimensions = data.dimensions;
         if (data.medium !== undefined) payload.art_type = data.medium;
+
+        if (data.isFeatured !== undefined) {
+          const { data: existing } = await supabase.from("artworks").select("tags").eq("id", id).maybeSingle();
+          let currentTags: string[] = Array.isArray(existing?.tags) ? [...existing.tags] : [];
+          if (data.isFeatured) {
+            if (!currentTags.includes("featured")) currentTags.push("featured");
+          } else {
+            currentTags = currentTags.filter((t) => t !== "featured");
+          }
+          payload.tags = currentTags;
+        }
 
         const { data: updated, error } = await (supabase.from("artworks") as any)
           .update(payload)
@@ -278,7 +298,10 @@ export const artworksRepo = {
     if (supabase) {
       try {
         const payload: Record<string, any> = {};
-        if (data.status !== undefined) payload.status = toSupabaseStatus(data.status);
+        if (data.status !== undefined) {
+          payload.status = toSupabaseStatus(data.status);
+          payload.is_published = !(data.status === "draft" || data.status === "rejected" || (data.status as string) === "Not for sale");
+        }
 
         const { error, count } = await (supabase.from("artworks") as any)
           .update(payload)

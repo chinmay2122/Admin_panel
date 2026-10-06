@@ -80,7 +80,7 @@ export function filterSafeArtworkUpdates(data: Partial<Artwork>): Partial<Artwor
   if (typeof data.price === "number" && !isNaN(data.price) && data.price >= 0) {
     safe.price = Number(data.price);
   }
-  if (data.status && ["published", "draft", "Available", "For Sale", "Sold", "Not for sale"].includes(data.status)) {
+  if (data.status && ["published", "draft", "Available", "For Sale", "Sold", "Not for sale", "rejected", "pending"].includes(data.status)) {
     safe.status = data.status;
   }
   if (typeof data.dimensions === "string") {
@@ -94,6 +94,12 @@ export function filterSafeArtworkUpdates(data: Partial<Artwork>): Partial<Artwor
   }
   if (typeof data.imageUrl === "string" && data.imageUrl.startsWith("http")) {
     safe.imageUrl = data.imageUrl.trim();
+  }
+  if (typeof data.isFeatured === "boolean") {
+    safe.isFeatured = data.isFeatured;
+  }
+  if (typeof data.isFlagged === "boolean") {
+    safe.isFlagged = data.isFlagged;
   }
 
   return safe;
@@ -115,6 +121,10 @@ export function filterSafeUserUpdates(
 
   if (data.status && ["active", "suspended"].includes(data.status)) {
     safe.status = data.status;
+  }
+
+  if (data.plan && ["free", "pro", "elite"].includes(data.plan)) {
+    safe.plan = data.plan;
   }
 
   // Role changes only permitted if explicitly authorized by super_admin
@@ -139,6 +149,9 @@ export function filterSafeCreatorUpdates(data: Partial<Creator>): Partial<Creato
   }
   if (data.status && ["active", "pending", "suspended"].includes(data.status)) {
     safe.status = data.status;
+  }
+  if (data.plan && ["free", "pro", "elite"].includes(data.plan)) {
+    safe.plan = data.plan;
   }
 
   return safe;

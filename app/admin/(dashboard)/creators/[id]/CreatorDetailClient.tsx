@@ -2,9 +2,13 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Creator, Artwork, CorMember } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import { Creator, Artwork, CorMember, CreatorStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { useToast } from "@/components/ui";
+import { updateCreatorAction, deleteCreatorAction } from "@/app/admin/actions";
 import {
   ArrowLeft,
   Mail,
@@ -15,6 +19,7 @@ import {
   Phone,
   Image as ImageIcon,
   Award,
+  AlertTriangle,
 } from "lucide-react";
 
 interface CreatorDetailClientProps {
@@ -41,7 +46,82 @@ export function CreatorDetailClient({
   artworks,
   corMember,
 }: CreatorDetailClientProps) {
+  const router = useRouter();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<"overview" | "artworks" | "cor">("overview");
+
+  const [creatorState, setCreatorState] = useState<Creator>(creator);
+  const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
+  const isSuspended = creatorState.status === "suspended";
+
+  // Suspend / Restore Access
+  const handleConfirmSuspendToggle = async () => {
+    const nextStatus: CreatorStatus = isSuspended ? "active" : "suspended";
+    setIsActionLoading(true);
+    try {
+      const res = await updateCreatorAction(creatorState.id, { status: nextStatus });
+      if (!res.success) {
+        toast.error(
+          isSuspended ? "Failed to restore access" : "Failed to suspend creator",
+          res.error || "Please try again."
+        );
+      } else {
+        setCreatorState((prev) => ({ ...prev, status: nextStatus }));
+        toast.success(
+          nextStatus === "suspended" ? "Creator Suspended" : "Access Restored",
+          `${creatorState.name} is now ${nextStatus}.`
+        );
+        setIsSuspendModalOpen(false);
+      }
+    } catch {
+      toast.error("Network Error", "Could not complete moderation action.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  // Delete Account
+  const handleConfirmDelete = async () => {
+    setIsActionLoading(true);
+    try {
+      const res = await deleteCreatorAction(creatorState.id);
+      if (!res.success) {
+        toast.error("Failed to delete account", res.error || "Please try again.");
+        setIsActionLoading(false);
+      } else {
+        toast.success("Account Deleted", `${creatorState.name}'s profile was removed.`);
+        setIsDeleteModalOpen(false);
+        router.push("/admin/creators");
+      }
+    } catch {
+      toast.error("Network Error", "Could not delete account.");
+      setIsActionLoading(false);
+    }
+  };
+
+  // Archive Account (soft moderation toggle)
+  const handleConfirmArchive = async () => {
+    setIsActionLoading(true);
+    try {
+      const nextStatus: CreatorStatus = creatorState.status === "pending" ? "active" : "pending";
+      const res = await updateCreatorAction(creatorState.id, { status: nextStatus });
+      if (!res.success) {
+        toast.error("Failed to update archive status", res.error || "Please try again.");
+      } else {
+        setCreatorState((prev) => ({ ...prev, status: nextStatus }));
+        toast.success("Status Updated", `Creator archive status has been updated.`);
+        setIsArchiveModalOpen(false);
+      }
+    } catch {
+      toast.error("Network Error", "Could not update archive status.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6 text-[#141413]">
@@ -60,51 +140,173 @@ export function CreatorDetailClient({
       <div className="p-6 rounded-2xl border border-[#E8E8E3] bg-white shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            {creator.profilePicUrl ? (
+            {creatorState.profilePicUrl ? (
               <img
-                src={creator.profilePicUrl}
-                alt={creator.name}
+                src={creatorState.profilePicUrl}
+                alt={creatorState.name}
                 className="w-16 h-16 rounded-full object-cover border-2 border-[#E8E8E3]"
               />
             ) : (
               <div className="w-16 h-16 rounded-full bg-[#EAEAE5] flex items-center justify-center text-lg font-bold text-[#141413]">
-                {creator.name.slice(0, 2).toUpperCase()}
+                {creatorState.name.slice(0, 2).toUpperCase()}
               </div>
             )}
             <div>
               <div className="flex items-center gap-2.5">
                 <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[#141413]">
-                  {creator.name}
+                  {creatorState.name}
                 </h1>
                 <Badge
                   variant={
-                    creator.status === "active"
+                    creatorState.status === "active"
                       ? "success"
-                      : creator.status === "pending"
+                      : creatorState.status === "pending"
                       ? "warning"
                       : "danger"
                   }
                   size="sm"
                   dot
                 >
-                  {creator.status}
+                  {creatorState.status}
                 </Badge>
               </div>
               <p className="text-xs md:text-sm text-[#6E6E69] mt-0.5">
-                {creator.email || "No email"} · {creator.location || "Remote"} · Joined {formatDate(creator.createdAt)}
+                {creatorState.email || "No email"} · {creatorState.location || "Remote"} · Joined {formatDate(creatorState.createdAt)}
               </p>
               <div className="text-xs font-semibold text-[#B8532F] mt-1">
-                {creator.discipline}
+                {creatorState.discipline}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline">Suspend</Button>
-            <Button variant="outline">Archive</Button>
-            <Button variant="danger">Delete Account</Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsSuspendModalOpen(true)}
+              className={isSuspended ? "text-emerald-700 hover:text-emerald-800" : ""}
+            >
+              {isSuspended ? "Restore Access" : "Suspend"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsArchiveModalOpen(true)}
+            >
+              Archive
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => setIsDeleteModalOpen(true)}
+            >
+              Delete Account
+            </Button>
           </div>
         </div>
+
+        {/* Confirmation Modal: Suspend / Restore */}
+        <Modal
+          isOpen={isSuspendModalOpen}
+          onClose={() => !isActionLoading && setIsSuspendModalOpen(false)}
+          title={isSuspended ? "Restore Creator Access" : "Suspend Creator Account"}
+          description={
+            isSuspended
+              ? `Are you sure you want to restore full creator platform access for ${creatorState.name}?`
+              : `Suspending this creator will restrict their ability to post artworks, apply for opportunities, or access creator tools.`
+          }
+          footer={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsSuspendModalOpen(false)}
+                disabled={isActionLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant={isSuspended ? "primary" : "danger"}
+                size="sm"
+                onClick={handleConfirmSuspendToggle}
+                isLoading={isActionLoading}
+              >
+                {isSuspended ? "Restore Access" : "Suspend Account"}
+              </Button>
+            </>
+          }
+        >
+          <div className="p-3 bg-[#F9F9F8] border border-[#E8E8E3] rounded-lg text-xs text-[#6E6E69] space-y-1">
+            <p className="font-semibold text-[#141413]">Account Impact:</p>
+            <p>• Profile: {creatorState.name} ({creatorState.email || "No email"})</p>
+            <p>• Action: {isSuspended ? "Reactivate active status" : "Revoke active publishing privileges"}</p>
+          </div>
+        </Modal>
+
+        {/* Confirmation Modal: Delete */}
+        <Modal
+          isOpen={isDeleteModalOpen}
+          onClose={() => !isActionLoading && setIsDeleteModalOpen(false)}
+          title="Delete Creator Account"
+          description={`Permanently remove ${creatorState.name}'s profile from the platform? This action cannot be undone.`}
+          footer={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isActionLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleConfirmDelete}
+                isLoading={isActionLoading}
+              >
+                Delete Account Permanently
+              </Button>
+            </>
+          }
+        >
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+            <div>
+              <p className="font-semibold text-red-800">Critical Warning</p>
+              <p>Removing this profile will delete creator credentials and associated profile metadata.</p>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Confirmation Modal: Archive */}
+        <Modal
+          isOpen={isArchiveModalOpen}
+          onClose={() => !isActionLoading && setIsArchiveModalOpen(false)}
+          title="Archive Creator"
+          description={`Archive ${creatorState.name}'s profile to remove it from primary active creator listings while retaining data for administrators.`}
+          footer={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsArchiveModalOpen(false)}
+                disabled={isActionLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleConfirmArchive}
+                isLoading={isActionLoading}
+              >
+                Archive Creator
+              </Button>
+            </>
+          }
+        >
+          <div className="p-3 bg-[#F9F9F8] border border-[#E8E8E3] rounded-lg text-xs text-[#6E6E69]">
+            <p>Archiving maintains all records, commission histories, and past inquiries in the system.</p>
+          </div>
+        </Modal>
 
         {/* Quick summary stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-[#E8E8E3] text-xs">

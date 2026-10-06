@@ -2,9 +2,13 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Collector } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import { Collector, CollectorStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { useToast } from "@/components/ui";
+import { updateCollectorAction, deleteCollectorAction } from "@/app/admin/actions";
 import {
   ArrowLeft,
   Mail,
@@ -13,6 +17,7 @@ import {
   Sparkles,
   Phone,
   ImageIcon,
+  AlertTriangle,
 } from "lucide-react";
 
 interface CollectorDetailClientProps {
@@ -35,7 +40,82 @@ function formatDate(dateStr: string): string {
 export function CollectorDetailClient({
   collector,
 }: CollectorDetailClientProps) {
+  const router = useRouter();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<"overview" | "collection">("overview");
+
+  const [collectorState, setCollectorState] = useState<Collector>(collector);
+  const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
+  const isSuspended = collectorState.status === "suspended";
+
+  // Suspend / Restore Access
+  const handleConfirmSuspendToggle = async () => {
+    const nextStatus: CollectorStatus = isSuspended ? "active" : "suspended";
+    setIsActionLoading(true);
+    try {
+      const res = await updateCollectorAction(collectorState.id, { status: nextStatus });
+      if (!res.success) {
+        toast.error(
+          isSuspended ? "Failed to restore access" : "Failed to suspend collector",
+          res.error || "Please try again."
+        );
+      } else {
+        setCollectorState((prev) => ({ ...prev, status: nextStatus }));
+        toast.success(
+          nextStatus === "suspended" ? "Collector Suspended" : "Access Restored",
+          `${collectorState.name} is now ${nextStatus}.`
+        );
+        setIsSuspendModalOpen(false);
+      }
+    } catch {
+      toast.error("Network Error", "Could not complete moderation action.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  // Delete Account
+  const handleConfirmDelete = async () => {
+    setIsActionLoading(true);
+    try {
+      const res = await deleteCollectorAction(collectorState.id);
+      if (!res.success) {
+        toast.error("Failed to delete account", res.error || "Please try again.");
+        setIsActionLoading(false);
+      } else {
+        toast.success("Account Deleted", `${collectorState.name}'s profile was removed.`);
+        setIsDeleteModalOpen(false);
+        router.push("/admin/collectors");
+      }
+    } catch {
+      toast.error("Network Error", "Could not delete account.");
+      setIsActionLoading(false);
+    }
+  };
+
+  // Archive Account
+  const handleConfirmArchive = async () => {
+    setIsActionLoading(true);
+    try {
+      const nextStatus: CollectorStatus = collectorState.status === "pending" ? "active" : "pending";
+      const res = await updateCollectorAction(collectorState.id, { status: nextStatus });
+      if (!res.success) {
+        toast.error("Failed to update archive status", res.error || "Please try again.");
+      } else {
+        setCollectorState((prev) => ({ ...prev, status: nextStatus }));
+        toast.success("Status Updated", `Collector archive status has been updated.`);
+        setIsArchiveModalOpen(false);
+      }
+    } catch {
+      toast.error("Network Error", "Could not update archive status.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6 text-[#141413]">
@@ -54,53 +134,173 @@ export function CollectorDetailClient({
       <div className="p-6 rounded-2xl border border-[#E8E8E3] bg-white shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            {collector.profilePicUrl ? (
+            {collectorState.profilePicUrl ? (
               <img
-                src={collector.profilePicUrl}
-                alt={collector.name}
+                src={collectorState.profilePicUrl}
+                alt={collectorState.name}
                 className="w-16 h-16 rounded-full object-cover border-2 border-[#E8E8E3]"
               />
             ) : (
               <div className="w-16 h-16 rounded-full bg-[#EAEAE5] flex items-center justify-center text-lg font-bold text-[#141413]">
-                {collector.name.slice(0, 2).toUpperCase()}
+                {collectorState.name.slice(0, 2).toUpperCase()}
               </div>
             )}
             <div>
               <div className="flex items-center gap-2.5">
                 <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[#141413]">
-                  {collector.name}
+                  {collectorState.name}
                 </h1>
                 <Badge
                   variant={
-                    collector.status === "active"
+                    collectorState.status === "active"
                       ? "success"
-                      : collector.status === "pending"
+                      : collectorState.status === "pending"
                       ? "warning"
                       : "danger"
                   }
                   size="sm"
                   dot
                 >
-                  {collector.status}
+                  {collectorState.status}
                 </Badge>
               </div>
               <p className="text-xs md:text-sm text-[#6E6E69] mt-0.5">
-                {collector.email || "No email"} · {collector.location || "Remote"} · Joined {formatDate(collector.createdAt)}
+                {collectorState.email || "No email"} · {collectorState.location || "Remote"} · Joined {formatDate(collectorState.createdAt)}
               </p>
               <div className="text-xs font-semibold text-[#B8532F] mt-1">
-                {collector.preferences || "Various Art Forms"}
+                {collectorState.preferences || "Various Art Forms"}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline">Suspend</Button>
-            <Button variant="outline">Archive</Button>
-            <Button variant="danger">Delete Account</Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsSuspendModalOpen(true)}
+              className={isSuspended ? "text-emerald-700 hover:text-emerald-800" : ""}
+            >
+              {isSuspended ? "Restore Access" : "Suspend"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsArchiveModalOpen(true)}
+            >
+              Archive
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => setIsDeleteModalOpen(true)}
+            >
+              Delete Account
+            </Button>
           </div>
         </div>
 
+        {/* Confirmation Modal: Suspend / Restore */}
+        <Modal
+          isOpen={isSuspendModalOpen}
+          onClose={() => !isActionLoading && setIsSuspendModalOpen(false)}
+          title={isSuspended ? "Restore Collector Access" : "Suspend Collector Account"}
+          description={
+            isSuspended
+              ? `Are you sure you want to restore full platform access for ${collectorState.name}?`
+              : `Suspending this collector will prevent them from inquiring about artworks, communicating with creators, or accessing platform features.`
+          }
+          footer={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsSuspendModalOpen(false)}
+                disabled={isActionLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant={isSuspended ? "primary" : "danger"}
+                size="sm"
+                onClick={handleConfirmSuspendToggle}
+                isLoading={isActionLoading}
+              >
+                {isSuspended ? "Restore Access" : "Suspend Collector"}
+              </Button>
+            </>
+          }
+        >
+          <div className="p-3 bg-[#F9F9F8] border border-[#E8E8E3] rounded-lg text-xs text-[#6E6E69] space-y-1">
+            <p className="font-semibold text-[#141413]">Collector Profile:</p>
+            <p>• User: {collectorState.name} ({collectorState.email || "No email"})</p>
+            <p>• Status change: {isSuspended ? "active" : "suspended"}</p>
+          </div>
+        </Modal>
 
+        {/* Confirmation Modal: Delete */}
+        <Modal
+          isOpen={isDeleteModalOpen}
+          onClose={() => !isActionLoading && setIsDeleteModalOpen(false)}
+          title="Delete Collector Account"
+          description={`Permanently remove ${collectorState.name}'s profile from the platform? This action cannot be undone.`}
+          footer={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isActionLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleConfirmDelete}
+                isLoading={isActionLoading}
+              >
+                Delete Account Permanently
+              </Button>
+            </>
+          }
+        >
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+            <div>
+              <p className="font-semibold text-red-800">Critical Warning</p>
+              <p>Removing this profile will delete collector access, past inquiry relations, and associated user records.</p>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Confirmation Modal: Archive */}
+        <Modal
+          isOpen={isArchiveModalOpen}
+          onClose={() => !isActionLoading && setIsArchiveModalOpen(false)}
+          title="Archive Collector"
+          description={`Archive ${collectorState.name}'s profile to remove it from active listings while preserving interaction history.`}
+          footer={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsArchiveModalOpen(false)}
+                disabled={isActionLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleConfirmArchive}
+                isLoading={isActionLoading}
+              >
+                Archive Collector
+              </Button>
+            </>
+          }
+        >
+          <div className="p-3 bg-[#F9F9F8] border border-[#E8E8E3] rounded-lg text-xs text-[#6E6E69]">
+            <p>Archiving preserves existing inquiries, messages, and transactional records.</p>
+          </div>
+        </Modal>
       </div>
 
       {/* Tabs navigation */}

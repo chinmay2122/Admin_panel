@@ -430,51 +430,107 @@ export function ArtworksClient({
   // Toggle Featured status
   const handleToggleFeature = async (art: Artwork) => {
     const nextVal = !art.isFeatured;
+    const previous = [...artworks];
+
+    // Optimistic UI update
     setArtworks((prev) =>
       prev.map((a) => (a.id === art.id ? { ...a, isFeatured: nextVal } : a))
     );
+    if (viewingArtwork?.id === art.id) {
+      setViewingArtwork((prev) => (prev ? { ...prev, isFeatured: nextVal } : null));
+    }
+
     try {
-      await updateArtworkAction(art.id, { isFeatured: nextVal } as any);
-      toast.success(
-        nextVal ? "Artwork featured" : "Artwork unfeatured",
-        `"${art.title}" ${nextVal ? "featured on platform" : "unfeatured"}.`
-      );
+      const res = await updateArtworkAction(art.id, { isFeatured: nextVal });
+      if (!res.success) {
+        setArtworks(previous);
+        if (viewingArtwork?.id === art.id) {
+          setViewingArtwork((prev) => (prev ? { ...prev, isFeatured: !nextVal } : null));
+        }
+        toast.error("Failed to update featured status", res.error || "Please try again.");
+      } else {
+        toast.success(
+          nextVal ? "Artwork featured" : "Artwork unfeatured",
+          `"${art.title}" ${nextVal ? "featured on platform" : "unfeatured"}.`
+        );
+      }
     } catch {
-      toast.error("Error", "Could not update featured status.");
+      setArtworks(previous);
+      if (viewingArtwork?.id === art.id) {
+        setViewingArtwork((prev) => (prev ? { ...prev, isFeatured: !nextVal } : null));
+      }
+      toast.error("Network Error", "Could not update featured status.");
     }
   };
 
   // Toggle Visibility (Published / Draft)
   const handleToggleHide = async (art: Artwork) => {
-    const nextStatus: ArtworkStatus = art.status === "published" ? "draft" : "published";
+    const nextStatus: ArtworkStatus = (art.status === "draft" || art.status === "rejected") ? "published" : "draft";
+    const previous = [...artworks];
+
+    // Optimistic UI update
     setArtworks((prev) =>
       prev.map((a) => (a.id === art.id ? { ...a, status: nextStatus } : a))
     );
+    if (viewingArtwork?.id === art.id) {
+      setViewingArtwork((prev) => (prev ? { ...prev, status: nextStatus } : null));
+    }
+
     try {
-      await updateArtworkAction(art.id, { status: nextStatus });
-      toast.success(
-        nextStatus === "draft" ? "Artwork hidden" : "Artwork published",
-        `"${art.title}" is now ${nextStatus === "draft" ? "hidden (draft)" : "published"}.`
-      );
+      const res = await updateArtworkAction(art.id, { status: nextStatus });
+      if (!res.success) {
+        setArtworks(previous);
+        if (viewingArtwork?.id === art.id) {
+          setViewingArtwork((prev) => (prev ? { ...prev, status: art.status } : null));
+        }
+        toast.error("Failed to update visibility", res.error || "Please try again.");
+      } else {
+        toast.success(
+          nextStatus === "draft" ? "Artwork hidden" : "Artwork published",
+          `"${art.title}" is now ${nextStatus === "draft" ? "hidden (draft)" : "published"}.`
+        );
+      }
     } catch {
-      toast.error("Error", "Could not update artwork visibility.");
+      setArtworks(previous);
+      if (viewingArtwork?.id === art.id) {
+        setViewingArtwork((prev) => (prev ? { ...prev, status: art.status } : null));
+      }
+      toast.error("Network Error", "Could not update artwork visibility.");
     }
   };
 
   // Toggle Flagged status
   const handleToggleFlag = async (art: Artwork) => {
     const nextVal = !art.isFlagged;
+    const previous = [...artworks];
+
     setArtworks((prev) =>
       prev.map((a) => (a.id === art.id ? { ...a, isFlagged: nextVal } : a))
     );
+    if (viewingArtwork?.id === art.id) {
+      setViewingArtwork((prev) => (prev ? { ...prev, isFlagged: nextVal } : null));
+    }
+
     try {
-      await updateArtworkAction(art.id, { isFlagged: nextVal } as any);
-      toast.info(
-        nextVal ? "Artwork flagged" : "Flag cleared",
-        `"${art.title}" ${nextVal ? "flagged for review" : "unflagged"}.`
-      );
+      const res = await updateArtworkAction(art.id, { isFlagged: nextVal });
+      if (!res.success) {
+        setArtworks(previous);
+        if (viewingArtwork?.id === art.id) {
+          setViewingArtwork((prev) => (prev ? { ...prev, isFlagged: !nextVal } : null));
+        }
+        toast.error("Failed to update flag", res.error || "Please try again.");
+      } else {
+        toast.info(
+          nextVal ? "Artwork flagged" : "Flag cleared",
+          `"${art.title}" ${nextVal ? "flagged for review" : "unflagged"}.`
+        );
+      }
     } catch {
-      toast.error("Error", "Could not update flagged status.");
+      setArtworks(previous);
+      if (viewingArtwork?.id === art.id) {
+        setViewingArtwork((prev) => (prev ? { ...prev, isFlagged: !nextVal } : null));
+      }
+      toast.error("Network Error", "Could not update flagged status.");
     }
   };
 
@@ -719,11 +775,7 @@ export function ArtworksClient({
                 variant={viewingArtwork.isFeatured ? "primary" : "outline"}
                 size="sm"
                 className="inline-flex items-center justify-center gap-2"
-                onClick={async () => {
-                  await handleToggleFeature(viewingArtwork);
-                  // Update viewingArtwork so the Drawer UI updates immediately
-                  setViewingArtwork(prev => prev ? { ...prev, isFeatured: !prev.isFeatured } : null);
-                }}
+                onClick={() => handleToggleFeature(viewingArtwork)}
               >
                 <Star className={`w-4 h-4 ${viewingArtwork.isFeatured ? "fill-current" : ""}`} />
                 {viewingArtwork.isFeatured ? "Featured" : "Feature"}
@@ -733,11 +785,7 @@ export function ArtworksClient({
                 variant="outline"
                 size="sm"
                 className="inline-flex items-center justify-center gap-2"
-                onClick={async () => {
-                  await handleToggleHide(viewingArtwork);
-                  // Update viewingArtwork so the Drawer UI updates immediately
-                  setViewingArtwork(prev => prev ? { ...prev, status: prev.status === "draft" ? "published" : "draft" } : null);
-                }}
+                onClick={() => handleToggleHide(viewingArtwork)}
               >
                 {viewingArtwork.status === "draft" || viewingArtwork.status === "rejected" ? (
                   <>

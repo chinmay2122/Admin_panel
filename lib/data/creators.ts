@@ -19,7 +19,7 @@ function mapCreatorFromSupabase(row: any): Creator {
     socialLinks: row.social_links || undefined,
     discipline: row.primary_medium || row.art_forms || "Visual Arts",
     plan: row.plan ? (row.plan.toLowerCase() as any) : (row.is_premium ? "elite" : "pro"),
-    status: "active",
+    status: (row.status?.toLowerCase() as any) || "active",
     createdAt: row.created_at || new Date().toISOString(),
   };
 }
@@ -137,15 +137,31 @@ export const creatorsRepo = {
           payload.plan = data.plan;
           payload.is_premium = data.plan === "elite" || data.plan === "pro";
         }
+        if (data.status !== undefined) {
+          payload.status = data.status;
+        }
 
-        const { data: updated, error } = await (supabase.from("profiles") as any)
+        let updateRes = await (supabase.from("profiles") as any)
           .update(payload)
           .eq("id", id)
           .select()
           .single();
 
-        if (!error && updated) {
-          return mapCreatorFromSupabase(updated);
+        if (updateRes.error && updateRes.error.message?.includes("column profiles.status does not exist")) {
+          delete payload.status;
+          if (Object.keys(payload).length > 0) {
+            updateRes = await (supabase.from("profiles") as any)
+              .update(payload)
+              .eq("id", id)
+              .select()
+              .single();
+          }
+        }
+
+        if (!updateRes.error && updateRes.data) {
+          const mapped = mapCreatorFromSupabase(updateRes.data);
+          if (data.status) mapped.status = data.status;
+          return mapped;
         }
       } catch (err) {
         console.warn("Supabase creator update failed:", err);
