@@ -25,6 +25,7 @@ import {
 import { DEFAULT_ADMIN } from "@/lib/auth";
 import { ToastProvider } from "@/components/ui";
 import { isBrowserSupabaseConfigured } from "@/lib/supabase/client";
+import { getAdminSidebarCountsAction, SidebarCounts } from "@/app/admin/sidebar-actions";
 
 interface NavItem {
   name: string;
@@ -79,6 +80,86 @@ export default function DashboardLayout({
   const router = useRouter();
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [serverCounts, setServerCounts] = useState<SidebarCounts>({
+    creators: 0,
+    artworks: 0,
+    reports: 0,
+    corRequests: 0,
+    corApplications: 0,
+    totalCor: 0,
+  });
+  const [clearedCounts, setClearedCounts] = useState<Partial<SidebarCounts>>({});
+
+  // Initialize cleared counts from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("adminSidebarClearedCounts");
+      if (stored) {
+        setClearedCounts(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error("Could not parse stored counts", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        const res = await getAdminSidebarCountsAction();
+        if (res.success && res.counts) {
+          setServerCounts(res.counts);
+        }
+      } catch (error) {
+        console.error("Failed to fetch sidebar counts:", error);
+      }
+    };
+
+    // Fetch immediately on mount and when pathname changes
+    fetchCounts();
+
+    // Poll every 5 seconds for real-time updates
+    const intervalId = setInterval(fetchCounts, 5000);
+
+    return () => clearInterval(intervalId);
+  }, [pathname]);
+
+  // Update cleared counts when a section is visited
+  useEffect(() => {
+    let changed = false;
+    const newCleared = { ...clearedCounts };
+
+    const checkAndClear = (pathMatch: string, key: keyof SidebarCounts) => {
+      if (pathname === pathMatch || pathname.startsWith(`${pathMatch}/`)) {
+        if (newCleared[key] !== serverCounts[key]) {
+          newCleared[key] = serverCounts[key];
+          changed = true;
+        }
+      }
+    };
+
+    checkAndClear("/admin/creators", "creators");
+    checkAndClear("/admin/artworks", "artworks");
+    checkAndClear("/admin/reports", "reports");
+    checkAndClear("/admin/cor/requests", "corRequests");
+    checkAndClear("/admin/cor/applications", "corApplications");
+
+    if (changed) {
+      setClearedCounts(newCleared);
+      try {
+        localStorage.setItem("adminSidebarClearedCounts", JSON.stringify(newCleared));
+      } catch (e) {}
+    }
+  }, [pathname, serverCounts, clearedCounts]);
+
+  // Calculate actual display counts (server count - cleared count)
+  const displayCounts = {
+    creators: Math.max(0, serverCounts.creators - (clearedCounts.creators || 0)),
+    artworks: Math.max(0, serverCounts.artworks - (clearedCounts.artworks || 0)),
+    reports: Math.max(0, serverCounts.reports - (clearedCounts.reports || 0)),
+    corRequests: Math.max(0, serverCounts.corRequests - (clearedCounts.corRequests || 0)),
+    corApplications: Math.max(0, serverCounts.corApplications - (clearedCounts.corApplications || 0)),
+  };
+  const displayTotalCor = displayCounts.corRequests + displayCounts.corApplications;
 
   const currentPageTitle = getPageTitle(pathname);
 
@@ -192,9 +273,31 @@ export default function DashboardLayout({
                         />
                         <span>{item.name}</span>
                       </div>
-                      {(isActive || (isCor && isCorActive)) && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#B8532F]" />
-                      )}
+                      <div className="flex items-center gap-2">
+                        {item.name === "Creators" && displayCounts.creators > 0 && (
+                          <span className="text-[10px] font-bold bg-[#FBF0EA] text-[#B8532F] px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                            {displayCounts.creators}
+                          </span>
+                        )}
+                        {item.name === "Artworks" && displayCounts.artworks > 0 && (
+                          <span className="text-[10px] font-bold bg-[#FBF0EA] text-[#B8532F] px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                            {displayCounts.artworks}
+                          </span>
+                        )}
+                        {item.name === "Reports" && displayCounts.reports > 0 && (
+                          <span className="text-[10px] font-bold bg-[#FBF0EA] text-[#B8532F] px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                            {displayCounts.reports}
+                          </span>
+                        )}
+                        {item.name === "COR" && displayTotalCor > 0 && !isCorActive && (
+                          <span className="text-[10px] font-bold bg-[#FBF0EA] text-[#B8532F] px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                            {displayTotalCor}
+                          </span>
+                        )}
+                        {(isActive || (isCor && isCorActive)) && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#B8532F]" />
+                        )}
+                      </div>
                     </Link>
 
                     {isCor && isCorActive && (
@@ -207,13 +310,23 @@ export default function DashboardLayout({
                               key={sub.href}
                               href={sub.href}
                               onClick={closeMobileDrawer}
-                              className={`block px-3 py-1.5 rounded-md text-xs transition-colors ${
+                              className={`flex items-center justify-between px-3 py-1.5 rounded-md text-xs transition-colors ${
                                 isSubActive
                                   ? "text-[#B8532F] font-semibold bg-[#FBF0EA]"
                                   : "text-[#71716D] hover:text-[#141413]"
                               }`}
                             >
-                              {sub.name}
+                              <span>{sub.name}</span>
+                              {sub.name === "Requests" && displayCounts.corRequests > 0 && (
+                                <span className="text-[9px] font-bold bg-white border border-[#E8E8E3] text-[#B8532F] px-1.5 py-0.5 rounded-full">
+                                  {displayCounts.corRequests}
+                               </span>
+                              )}
+                              {sub.name === "Applications" && displayCounts.corApplications > 0 && (
+                                <span className="text-[9px] font-bold bg-white border border-[#E8E8E3] text-[#B8532F] px-1.5 py-0.5 rounded-full">
+                                  {displayCounts.corApplications}
+                               </span>
+                              )}
                             </Link>
                           );
                         })}
@@ -302,9 +415,31 @@ export default function DashboardLayout({
                       />
                       <span>{item.name}</span>
                     </div>
-                    {(isActive || (isCor && isCorActive)) && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#B8532F]" />
-                    )}
+                    <div className="flex items-center gap-2">
+                      {item.name === "Creators" && displayCounts.creators > 0 && (
+                        <span className="text-[10px] font-bold bg-[#FBF0EA] text-[#B8532F] px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                          {displayCounts.creators}
+                        </span>
+                      )}
+                      {item.name === "Artworks" && displayCounts.artworks > 0 && (
+                        <span className="text-[10px] font-bold bg-[#FBF0EA] text-[#B8532F] px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                          {displayCounts.artworks}
+                        </span>
+                      )}
+                      {item.name === "Reports" && displayCounts.reports > 0 && (
+                        <span className="text-[10px] font-bold bg-[#FBF0EA] text-[#B8532F] px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                          {displayCounts.reports}
+                        </span>
+                      )}
+                      {item.name === "COR" && displayTotalCor > 0 && !isCorActive && (
+                        <span className="text-[10px] font-bold bg-[#FBF0EA] text-[#B8532F] px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                          {displayTotalCor}
+                        </span>
+                      )}
+                      {(isActive || (isCor && isCorActive)) && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#B8532F]" />
+                      )}
+                    </div>
                   </Link>
 
                   {/* Render COR sub-nav when in COR section */}
@@ -317,13 +452,23 @@ export default function DashboardLayout({
                           <Link
                             key={sub.href}
                             href={sub.href}
-                            className={`block px-2.5 py-1.5 rounded-md text-xs transition-colors ${
+                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition-colors ${
                               isSubActive
                                 ? "text-[#B8532F] font-semibold bg-[#FBF0EA]"
                                 : "text-[#71716D] hover:text-[#141413] hover:bg-[#F3F3EE]"
                             }`}
                           >
-                            {sub.name}
+                            <span>{sub.name}</span>
+                            {sub.name === "Requests" && displayCounts.corRequests > 0 && (
+                              <span className="text-[9px] font-bold bg-white border border-[#E8E8E3] text-[#B8532F] px-1.5 py-0.5 rounded-full">
+                                {displayCounts.corRequests}
+                              </span>
+                            )}
+                            {sub.name === "Applications" && displayCounts.corApplications > 0 && (
+                              <span className="text-[9px] font-bold bg-white border border-[#E8E8E3] text-[#B8532F] px-1.5 py-0.5 rounded-full">
+                                {displayCounts.corApplications}
+                              </span>
+                            )}
                           </Link>
                         );
                       })}

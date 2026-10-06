@@ -11,6 +11,7 @@ import {
 import { CorApplicationBadge } from "@/components/cor/CorStatusBadge";
 import { CorNavTabs } from "@/components/cor/CorNavTabs";
 import { ApplyForMemberModal } from "@/components/cor/ApplyForMemberModal";
+import { ExportDropdown } from "@/components/admin/ExportDropdown";
 import { Button } from "@/components/ui/Button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
@@ -126,6 +127,16 @@ export function CorApplicationsClient({
     return filteredApplications.slice(start, start + pageSize);
   }, [filteredApplications, currentPage, pageSize]);
 
+  const exportColumns = [
+    { header: "Creator", key: "creatorName" },
+    { header: "Company", key: "company" },
+    { header: "Opportunity", key: "opportunityTitle" },
+    { header: "Application Date", key: (row: CorApplication) => formatDate(row.appliedDate) },
+    { header: "Current Stage", key: "status" },
+    { header: "Interview Date", key: (row: CorApplication) => row.interviewDate ? formatDate(row.interviewDate) : "—" },
+    { header: "Managed By", key: "consultant" },
+  ];
+
   // Handle inline interactive status update
   const handleStatusChange = async (appId: string, newStatus: CorApplicationStatus) => {
     setUpdatingId(appId);
@@ -163,65 +174,36 @@ export function CorApplicationsClient({
       {/* Visual Reference Header matching Prototype */}
       <div className="border-b border-[#E8E8E3] pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-[#B8532F] mb-1">
-            CAREER OPERATIONS
-          </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#141413]">
-            Application tracker
+            Applications
           </h1>
           <p className="text-xs sm:text-sm text-[#6E6E69] mt-1 max-w-2xl">
             Keep every candidate and opportunity moving together. Update pipeline stages, manage interviews, and track offers.
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => setApplyModalOpen(true)}
-          className="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Apply for Member</span>
-        </Button>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+          <ExportDropdown
+            data={filteredApplications}
+            filename="iRAS-COR-Applications"
+            reportTitle="COR Applications Report"
+            columns={exportColumns}
+          />
+          <Button
+            variant="dark"
+            onClick={() => setApplyModalOpen(true)}
+            className="shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Apply for Creator</span>
+          </Button>
+        </div>
       </div>
 
       {/* Navigation Tabs */}
       <CorNavTabs counts={counts} />
 
-      {/* Metric summary badges matching prototype */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 text-xs">
-        <div className="p-3 rounded-xl border border-[#E8E8E3] bg-white text-center">
-          <div className="text-[11px] font-medium text-[#8A8A85]">Total</div>
-          <div className="text-lg font-bold text-[#141413] mt-0.5">{statusCounts.all}</div>
-        </div>
-        <div className="p-3 rounded-xl border border-[#E8E8E3] bg-white text-center">
-          <div className="text-[11px] font-medium text-[#6D28D9]">Recommended</div>
-          <div className="text-lg font-bold text-[#6D28D9] mt-0.5">{statusCounts["Recommended"] || 0}</div>
-        </div>
-        <div className="p-3 rounded-xl border border-[#E8E8E3] bg-white text-center">
-          <div className="text-[11px] font-medium text-[#1D4ED8]">Preparing</div>
-          <div className="text-lg font-bold text-[#1D4ED8] mt-0.5">{statusCounts["Preparing Application"] || 0}</div>
-        </div>
-        <div className="p-3 rounded-xl border border-[#E8E8E3] bg-white text-center">
-          <div className="text-[11px] font-medium text-[#15803D]">Applied</div>
-          <div className="text-lg font-bold text-[#15803D] mt-0.5">{statusCounts["Applied"] || 0}</div>
-        </div>
-        <div className="p-3 rounded-xl border border-[#E8E8E3] bg-white text-center">
-          <div className="text-[11px] font-medium text-[#B45309]">Screening</div>
-          <div className="text-lg font-bold text-[#B45309] mt-0.5">{statusCounts["Screening"] || 0}</div>
-        </div>
-        <div className="p-3 rounded-xl border border-[#E8E8E3] bg-white text-center">
-          <div className="text-[11px] font-medium text-[#92400E]">Interview</div>
-          <div className="text-lg font-bold text-[#92400E] mt-0.5">{statusCounts["Interview"] || 0}</div>
-        </div>
-        <div className="p-3 rounded-xl border border-[#E8E8E3] bg-white text-center">
-          <div className="text-[11px] font-medium text-[#86198F]">Final Round</div>
-          <div className="text-lg font-bold text-[#86198F] mt-0.5">{statusCounts["Final Round"] || 0}</div>
-        </div>
-        <div className="p-3 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] text-center">
-          <div className="text-[11px] font-semibold text-[#047857]">Offer</div>
-          <div className="text-lg font-bold text-[#047857] mt-0.5">{statusCounts["Offer"] || 0}</div>
-        </div>
-      </div>
+
 
       {/* Search and Filters Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -314,25 +296,25 @@ export function CorApplicationsClient({
           <TableHeader>
             <TableRow className="bg-[#FAFAF8] border-b border-[#E8E8E3]">
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Company / Role
+                Opportunity
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Candidate / Creator
+                Creator
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Current Status
+                Status
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Applied Date
+                Applied On
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Interview Date
+                Interview
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Consultant
+                Managed By
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider text-right">
-                Actions
+                Action
               </TableHead>
             </TableRow>
           </TableHeader>

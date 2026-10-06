@@ -44,6 +44,7 @@ import {
   createArtworkAction,
   createReportAction,
 } from "@/app/admin/actions";
+import { ExportDropdown } from "@/components/admin/ExportDropdown";
 import {
   Table,
   TableHeader,
@@ -885,6 +886,21 @@ export function ArtworksClient({
                 <List className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            <ExportDropdown
+              data={filteredArtworks}
+              filename="iRAS-Artworks"
+              reportTitle="Platform Artworks Report"
+              columns={[
+                { header: "Artwork Title", key: "title" },
+                { header: "Artist", key: "creatorName" },
+                { header: "Medium", key: "medium" },
+                { header: "Dimensions", key: "dimensions" },
+                { header: "Price", key: (row) => row.price ? formatCurrency(row.price) : "Price on request" },
+                { header: "Status", key: "status" },
+                { header: "Date Added", key: (row) => formatDate(row.createdAt) }
+              ]}
+            />
 
             {/* + Add Artwork Button */}
             <button

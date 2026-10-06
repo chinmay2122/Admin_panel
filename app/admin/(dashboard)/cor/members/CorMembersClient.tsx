@@ -10,6 +10,7 @@ import {
 import { CorMemberBadge, CorApplicationBadge } from "@/components/cor/CorStatusBadge";
 import { CorNavTabs } from "@/components/cor/CorNavTabs";
 import { ApplyForMemberModal } from "@/components/cor/ApplyForMemberModal";
+import { ExportDropdown } from "@/components/admin/ExportDropdown";
 import { Button } from "@/components/ui/Button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
@@ -127,9 +128,6 @@ export function CorMembersClient({
       {/* Header */}
       <div className="border-b border-[#E8E8E3] pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-[#B8532F] mb-1">
-            Career Operations
-          </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#141413]">
             COR Members
           </h1>
@@ -138,17 +136,31 @@ export function CorMembersClient({
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => {
-            setSelectedMemberForApply(members[0] || null);
-            setApplyModalOpen(true);
-          }}
-          className="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5"
-        >
-          <Send className="w-3.5 h-3.5" />
-          <span>Apply for Member</span>
-        </Button>
+        <div className="flex items-center gap-3 shrink-0">
+          <ExportDropdown
+            data={filteredMembers}
+            filename="iRAS-COR-Members"
+            reportTitle="COR Members Report"
+            columns={[
+              { header: "Creator", key: "name" },
+              { header: "Role", key: "desiredRole" },
+              { header: "Skills", key: (row) => (row.skills || []).join(", ") },
+              { header: "Location", key: "location" },
+              { header: "Status", key: "status" },
+              { header: "Joined On", key: (row) => formatDate(row.joinedAt) }
+            ]}
+          />
+          <Button
+            variant="dark"
+            onClick={() => {
+              setSelectedMemberForApply(members[0] || null);
+              setApplyModalOpen(true);
+            }}
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Apply for Creator</span>
+          </Button>
+        </div>
       </div>
 
       {/* Navigation Tabs */}
@@ -215,13 +227,13 @@ export function CorMembersClient({
           <TableHeader>
             <TableRow className="bg-[#FAFAF8] border-b border-[#E8E8E3]">
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                COR Member
+                Creator
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Desired Role & Skills
+                Role & Skills
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Location & Preference
+                Location
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
                 Status
@@ -230,7 +242,7 @@ export function CorMembersClient({
                 Applications
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider text-right">
-                Actions
+                Action
               </TableHead>
             </TableRow>
           </TableHeader>

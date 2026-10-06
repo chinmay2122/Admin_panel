@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
+import { ExportDropdown } from "@/components/admin/ExportDropdown";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -267,8 +268,24 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
             Manage member accounts, permissions, and moderation status.
           </p>
         </div>
-        <div className="text-xs text-[#6E6E69] font-medium">
-          Total: <span className="text-[#141413]">{users.length} members</span>
+        <div className="flex items-center gap-3 shrink-0">
+          <ExportDropdown
+            data={filteredUsers}
+            filename="iRAS-Users"
+            reportTitle="Platform Users Report"
+            columns={[
+              { header: "Name", key: "name" },
+              { header: "Email", key: "email" },
+              { header: "Role", key: "role" },
+              { header: "Plan", key: (row) => row.plan || "free" },
+              { header: "COR Member", key: (row) => row.isCorMember ? "Yes" : "No" },
+              { header: "Status", key: "status" },
+              { header: "Joined Date", key: (row) => formatDate(row.createdAt) }
+            ]}
+          />
+          <div className="text-xs text-[#6E6E69] font-medium">
+            Total: <span className="text-[#141413]">{users.length} members</span>
+          </div>
         </div>
       </div>
 

@@ -8,6 +8,7 @@ import {
 } from "@/lib/types";
 import { CorRequestBadge } from "@/components/cor/CorStatusBadge";
 import { CorNavTabs } from "@/components/cor/CorNavTabs";
+import { ExportDropdown } from "@/components/admin/ExportDropdown";
 import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -166,23 +167,35 @@ export function CorRequestsClient({
       {/* Top Header */}
       <div className="border-b border-[#E8E8E3] pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-[#B8532F] mb-1">
-            Career Operations
-          </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#141413]">
-            COR Requests
+            Creator Requests
           </h1>
           <p className="text-xs sm:text-sm text-[#6E6E69] mt-1 max-w-2xl">
-            Review creator questionnaire submissions, assess career readiness, and approve or decline COR representation.
+            Review creators who have requested support through COR.
           </p>
         </div>
 
-        {pendingCount > 0 && (
-          <div className="shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] text-[#92400E] text-xs font-semibold whitespace-nowrap">
-            <span className="w-2 h-2 rounded-full bg-[#F59E0B] animate-pulse" />
-            <span>{pendingCount} Pending Review</span>
-          </div>
-        )}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <ExportDropdown
+            data={filteredRequests}
+            filename="iRAS-COR-Requests"
+            reportTitle="COR Requests Report"
+            columns={[
+              { header: "Creator", key: "creatorName" },
+              { header: "Email", key: "creatorEmail" },
+              { header: "Requested On", key: (row) => formatDate(row.createdAt) },
+              { header: "Preferred Role", key: "desiredRole" },
+              { header: "Experience", key: "experienceYears" },
+              { header: "Status", key: "status" }
+            ]}
+          />
+          {pendingCount > 0 && (
+            <div className="shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] text-[#92400E] text-xs font-semibold whitespace-nowrap">
+              <span className="w-2 h-2 rounded-full bg-[#F59E0B] animate-pulse" />
+              <span>{pendingCount} Pending Review</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Navigation Tabs */}
@@ -249,22 +262,25 @@ export function CorRequestsClient({
           <TableHeader>
             <TableRow className="bg-[#FAFAF8] border-b border-[#E8E8E3]">
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Candidate / Creator
+                Creator
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Current Role & Experience
+                Requested On
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Desired Role & Skills
+                Career Goal
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Submitted
+                Preferred Role
+              </TableHead>
+              <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
+                Experience
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
                 Status
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider text-right">
-                Actions
+                Action
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -309,38 +325,24 @@ export function CorRequestsClient({
                     </div>
                   </TableCell>
 
-                  <TableCell className="py-3 px-4">
-                    <div className="text-xs font-medium text-[#141413]">
-                      {req.currentRole}
-                    </div>
-                    <div className="text-[11px] text-[#6E6E69]">
-                      {req.experienceYears} · {req.currentCompany || req.employmentStatus || "Independent"}
-                    </div>
-                  </TableCell>
-
-                  <TableCell className="py-3 px-4">
-                    <div className="text-xs font-medium text-[#B8532F]">
-                      {req.desiredRole}
-                    </div>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {req.skills.slice(0, 3).map((s) => (
-                        <span
-                          key={s}
-                          className="px-1.5 py-0.5 rounded bg-[#F3F3EE] text-[10px] font-medium text-[#5E5E59]"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                      {req.skills.length > 3 && (
-                        <span className="text-[10px] text-[#8A8A85]">
-                          +{req.skills.length - 3}
-                        </span>
-                      )}
-                    </div>
+                  <TableCell className="py-3 px-4 text-xs text-[#6E6E69]">
+                    {formatDate(req.createdAt)}
                   </TableCell>
 
                   <TableCell className="py-3 px-4 text-xs text-[#6E6E69]">
-                    {formatDate(req.createdAt)}
+                    {req.careerGoals?.additionalNotes ? req.careerGoals.additionalNotes.substring(0, 30) + '...' : "Not specified"}
+                  </TableCell>
+
+                  <TableCell className="py-3 px-4">
+                    <div className="text-xs font-medium text-[#141413]">
+                      {req.desiredRole}
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="py-3 px-4">
+                    <div className="text-xs font-medium text-[#141413]">
+                      {req.experienceYears}
+                    </div>
                   </TableCell>
 
                   <TableCell className="py-3 px-4">
@@ -381,7 +383,7 @@ export function CorRequestsClient({
       <Drawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
-        title="Candidate COR Questionnaire"
+        title="Review COR Request"
         maxWidth="lg"
       >
         {selectedRequest && (
@@ -419,28 +421,27 @@ export function CorRequestsClient({
 
             {/* Decision Action Banner if Pending */}
             {selectedRequest.status === "pending" && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-[#B8532F]/20 bg-[#FDF8F6] gap-3">
-                <div className="text-xs text-[#9E4323] leading-relaxed">
-                  <strong>Action Required:</strong> Review questionnaire responses and decide on COR representation.
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-[#E8E8E3] bg-[#FDF8F6] gap-3">
+                <div className="text-sm text-[#141413] font-medium leading-relaxed">
+                  <strong>COR Membership Decision</strong><br/>
+                  Would you like to accept this creator into COR?
                 </div>
                 <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                   <Button
                     size="sm"
-                    variant="danger"
+                    variant="secondary"
                     onClick={() => setIsDeclineModalOpen(true)}
-                    className="whitespace-nowrap"
+                    className="whitespace-nowrap bg-white text-[#141413] border border-[#E8E8E3] hover:bg-gray-50"
                   >
-                    <XCircle className="w-3.5 h-3.5 mr-1" />
-                    <span>Decline</span>
+                    Decline Request
                   </Button>
                   <Button
                     size="sm"
                     variant="primary"
                     onClick={() => setIsApproveModalOpen(true)}
-                    className="whitespace-nowrap"
+                    className="whitespace-nowrap bg-[#141413] hover:bg-[#2A2A28] text-white border-none"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                    <span>Approve Member</span>
+                    Approve Creator
                   </Button>
                 </div>
               </div>

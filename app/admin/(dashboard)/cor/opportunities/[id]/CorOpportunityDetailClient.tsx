@@ -142,7 +142,7 @@ export function CorOpportunityDetailClient({
               }}
               className="whitespace-nowrap inline-flex items-center"
             >
-              <Send className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+              <Send className="w-3.5 h-3.5 shrink-0" />
               <span>Apply for Candidate</span>
             </Button>
           </div>
@@ -388,7 +388,7 @@ export function CorOpportunityDetailClient({
                   }}
                   className="whitespace-nowrap inline-flex items-center"
                 >
-                  <Send className="w-3 h-3 mr-1 shrink-0" />
+                  <Send className="w-3 h-3 shrink-0" />
                   <span>Apply for {match.member.name}</span>
                 </Button>
               </div>

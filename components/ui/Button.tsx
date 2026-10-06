@@ -1,7 +1,7 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
 
-export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger";
+export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger" | "dark";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -43,6 +43,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         "bg-transparent text-[#5B5B56] hover:text-[#141413] hover:bg-[#F5F5F0] active:bg-[#EBEBE5] border border-transparent",
       danger:
         "bg-[#FDF3F2] text-[#B83838] border border-[#F4CDCD] hover:bg-[#FBE8E7] active:bg-[#F7D8D7]",
+      dark:
+        "bg-[#141413] text-white hover:bg-[#2A2A28] active:bg-[#3D3D3A] border border-[#141413]",
     };
 
     const sizeStyles: Record<ButtonSize, string> = {
@@ -61,13 +63,13 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {isLoading ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
         ) : (
-          leftIcon && <span className="inline-flex shrink-0">{leftIcon}</span>
+          leftIcon && <span className="inline-flex shrink-0 items-center justify-center">{leftIcon}</span>
         )}
-        <span>{children}</span>
+        {children}
         {!isLoading && rightIcon && (
-          <span className="inline-flex shrink-0">{rightIcon}</span>
+          <span className="inline-flex shrink-0 items-center justify-center">{rightIcon}</span>
         )}
       </button>
     );

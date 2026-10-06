@@ -26,6 +26,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
+import { ExportDropdown } from "@/components/admin/ExportDropdown";
 import { FilterBar, FilterSelectConfig } from "@/components/ui/FilterBar";
 import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -365,17 +366,32 @@ export function CreatorsClient({
             Curated studio roster, creator verification, and spotlight profiles.
           </p>
         </div>
-        <div className="flex items-center gap-3 text-xs text-[#6E6E69]">
-          <span>
-            Total: <strong className="text-[#141413]">{creators.length}</strong>
-          </span>
-          <span>•</span>
-          <span>
-            Pending:{" "}
-            <strong className="text-[#B8532F]">
-              {creators.filter((c) => c.status === "pending").length}
-            </strong>
-          </span>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 shrink-0">
+          <ExportDropdown
+            data={filteredCreators}
+            filename="iRAS-Creators"
+            reportTitle="Platform Creators Report"
+            columns={[
+              { header: "Creator Name", key: "name" },
+              { header: "ID", key: "id" },
+              { header: "Discipline", key: "discipline" },
+              { header: "Plan", key: (row) => row.plan || "free" },
+              { header: "Status", key: "status" },
+              { header: "Joined Date", key: (row) => formatDate(row.createdAt) }
+            ]}
+          />
+          <div className="flex items-center gap-3 text-xs text-[#6E6E69]">
+            <span>
+              Total: <strong className="text-[#141413]">{creators.length}</strong>
+            </span>
+            <span>•</span>
+            <span>
+              Pending:{" "}
+              <strong className="text-[#B8532F]">
+                {creators.filter((c) => c.status === "pending").length}
+              </strong>
+            </span>
+          </div>
         </div>
       </div>
 

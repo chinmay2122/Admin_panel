@@ -196,7 +196,7 @@ export function CorMemberDetailClient({
               variant="primary"
               onClick={() => handleOpenApplyWithOpportunity()}
             >
-              <Send className="w-3.5 h-3.5 mr-1.5" />
+              <Send className="w-3.5 h-3.5" />
               <span>Apply for Opportunity</span>
             </Button>
           </div>
@@ -441,7 +441,7 @@ export function CorMemberDetailClient({
               variant="primary"
               onClick={() => handleOpenApplyWithOpportunity()}
             >
-              <Send className="w-3 h-3 mr-1" />
+              <Send className="w-3 h-3" />
               <span>Apply for New Opportunity</span>
             </Button>
           </div>
@@ -554,7 +554,7 @@ export function CorMemberDetailClient({
                     variant="primary"
                     onClick={() => handleOpenApplyWithOpportunity(match.opportunity.id)}
                   >
-                    <Send className="w-3 h-3 mr-1" />
+                    <Send className="w-3 h-3" />
                     <span>Apply for Member</span>
                   </Button>
                 </div>
@@ -591,7 +591,7 @@ export function CorMemberDetailClient({
             />
             <div className="flex justify-end">
               <Button type="submit" variant="primary" size="sm" isLoading={isAddingNote}>
-                <Plus className="w-3.5 h-3.5 mr-1" />
+                <Plus className="w-3.5 h-3.5" />
                 <span>Save Note</span>
               </Button>
             </div>

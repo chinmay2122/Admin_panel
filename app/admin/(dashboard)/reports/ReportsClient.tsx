@@ -23,6 +23,7 @@ import { Report, ReportStatus } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Modal } from "@/components/ui/Modal";
+import { ExportDropdown } from "@/components/admin/ExportDropdown";
 import { Pagination } from "@/components/ui/Pagination";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui";
@@ -365,15 +366,32 @@ export function ReportsClient({ initialReports }: ReportsClientProps) {
       {/* ========================================================================= */}
       {/* 1. PAGE HEADER (iRAS Studio Editorial Style)                              */}
       {/* ========================================================================= */}
-      <div>
-        <h1 className="text-3xl sm:text-4xl font-serif text-[#141413] tracking-tight">
-          Reports & moderation
-        </h1>
-        <p className="mt-1 text-sm text-[#6E6E69]">
-          Keep the community safe, considered and respectful.
-        </p>
+      {/* ========================================================================= */}
+      {/* 1. PAGE HEADER (iRAS Studio Editorial Style)                              */}
+      {/* ========================================================================= */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl sm:text-4xl font-serif text-[#141413] tracking-tight">
+            Reports & moderation
+          </h1>
+          <p className="mt-1 text-sm text-[#6E6E69]">
+            Keep the community safe, considered and respectful.
+          </p>
+        </div>
+        <ExportDropdown
+          data={filteredReports}
+          filename="iRAS-Reports"
+          reportTitle="Platform Moderation Reports"
+          columns={[
+            { header: "Reported Content", key: (row) => row.artworkTitle || "Untitled" },
+            { header: "User", key: (row) => row.ownerName || "Unknown" },
+            { header: "Reason", key: "reason" },
+            { header: "Reporter", key: (row) => row.reporterName || "Community Member" },
+            { header: "Date", key: (row) => formatDate(row.createdAt) },
+            { header: "Status", key: "status" }
+          ]}
+        />
       </div>
-
 
       {/* ========================================================================= */}
       {/* 3. REPORT FILTER TABS & SEARCH                                            */}

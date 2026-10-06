@@ -179,7 +179,7 @@ export function CorApplicationDetailClient({
           className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6E6E69] hover:text-[#141413] transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Application Tracker</span>
+          <span>Back to Applications</span>
         </Link>
       </div>
 
@@ -194,7 +194,7 @@ export function CorApplicationDetailClient({
               <CorApplicationBadge status={application.status} />
             </div>
             <p className="text-xs md:text-sm text-[#6E6E69] mt-1">
-              Candidate: <strong>{application.creatorName}</strong> ({application.creatorEmail}) · Applied on {formatDate(application.appliedDate)} · Assigned Consultant: {application.consultant}
+              Creator: <strong>{application.creatorName}</strong> ({application.creatorEmail}) · Applied on {formatDate(application.appliedDate)} · Assigned to: {application.consultant}
             </p>
           </div>
 
@@ -203,7 +203,7 @@ export function CorApplicationDetailClient({
               href={`/admin/cor/members/${application.corMemberId}`}
               className="px-3 py-1.5 rounded-lg text-xs font-medium border border-[#E8E8E3] bg-white text-[#141413] hover:bg-[#F3F3EE] transition-colors whitespace-nowrap inline-flex items-center gap-1 shadow-2xs"
             >
-              <span>Candidate Profile</span>
+              <span>Creator Profile</span>
               <span aria-hidden="true">→</span>
             </Link>
             {opportunity && (
@@ -271,7 +271,7 @@ export function CorApplicationDetailClient({
           <div className="flex items-center justify-between border-b border-[#E8E8E3] pb-2.5">
             <h2 className="text-xs font-bold uppercase tracking-wider text-[#6E6E69] flex items-center gap-2">
               <User className="w-3.5 h-3.5 text-[#B8532F]" />
-              <span>Candidate Details</span>
+              <span>Creator Details</span>
             </h2>
             <Link
               href={`/admin/cor/members/${application.corMemberId}`}
@@ -482,7 +482,7 @@ export function CorApplicationDetailClient({
           />
           <div className="flex justify-end">
             <Button size="sm" variant="primary" type="submit" isLoading={isAddingNote}>
-              <Plus className="w-3.5 h-3.5 mr-1" />
+              <Plus className="w-3.5 h-3.5" />
               <span>Add Team Note</span>
             </Button>
           </div>

@@ -12,6 +12,7 @@ import { CorOpportunityBadge } from "@/components/cor/CorStatusBadge";
 import { CorNavTabs } from "@/components/cor/CorNavTabs";
 import { ApplyForMemberModal } from "@/components/cor/ApplyForMemberModal";
 import { rankMembersForOpportunity } from "@/lib/data/cor-matching";
+import { ExportDropdown } from "@/components/admin/ExportDropdown";
 import { Modal } from "@/components/ui/Modal";
 import { Drawer } from "@/components/ui/Drawer";
 import { Button } from "@/components/ui/Button";
@@ -186,9 +187,6 @@ export function CorOpportunitiesClient({
       {/* Header */}
       <div className="border-b border-[#E8E8E3] pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-[#B8532F] mb-1">
-            Career Operations
-          </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#141413]">
             Opportunities
           </h1>
@@ -197,14 +195,30 @@ export function CorOpportunitiesClient({
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => setIsAddModalOpen(true)}
-          className="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Add Opportunity</span>
-        </Button>
+        <div className="flex items-center gap-3 shrink-0">
+          <ExportDropdown
+            data={filteredOpportunities}
+            filename="iRAS-COR-Opportunities"
+            reportTitle="COR Opportunities Report"
+            columns={[
+              { header: "Opportunity", key: "title" },
+              { header: "Company", key: "company" },
+              { header: "Location", key: "location" },
+              { header: "Workplace", key: "workplaceType" },
+              { header: "Salary", key: (row) => row.salary || "Competitive" },
+              { header: "Skills", key: (row) => row.requiredSkills.join(", ") },
+              { header: "Status", key: "status" }
+            ]}
+          />
+          <Button
+            variant="primary"
+            onClick={() => setIsAddModalOpen(true)}
+            className="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 bg-[#141413] hover:bg-[#2A2A28] text-white"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Opportunity</span>
+          </Button>
+        </div>
       </div>
 
       {/* Navigation Tabs */}
@@ -271,22 +285,22 @@ export function CorOpportunitiesClient({
           <TableHeader>
             <TableRow className="bg-[#FAFAF8] border-b border-[#E8E8E3]">
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Opportunity / Company
+                Opportunity
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Location & Workplace
+                Location
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Salary / Budget
+                Salary
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
-                Required Skills
+                Skills
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider">
                 Status
               </TableHead>
               <TableHead className="py-3 px-4 text-xs font-semibold text-[#6E6E69] uppercase tracking-wider text-right">
-                Actions
+                Action
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -495,7 +509,7 @@ export function CorOpportunitiesClient({
                         setIsApplyModalOpen(true);
                       }}
                     >
-                      <Send className="w-3 h-3 mr-1" />
+                      <Send className="w-3 h-3" />
                       <span>Apply for {match.member.name}</span>
                     </Button>
                   </div>

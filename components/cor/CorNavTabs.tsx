@@ -19,14 +19,14 @@ export function CorNavTabs({ counts }: CorNavTabsProps) {
 
   const tabs = [
     {
-      name: "Hub Overview",
+      name: "Overview",
       href: "/admin/cor",
       icon: LayoutDashboard,
       exact: true,
       count: undefined,
     },
     {
-      name: "Requests",
+      name: "Creator Requests",
       href: "/admin/cor/requests",
       icon: Award,
       exact: false,
@@ -34,18 +34,11 @@ export function CorNavTabs({ counts }: CorNavTabsProps) {
       highlightCount: (counts?.requests || 0) > 0,
     },
     {
-      name: "Members",
+      name: "COR Members",
       href: "/admin/cor/members",
       icon: UserCheck,
       exact: false,
       count: counts?.members,
-    },
-    {
-      name: "Applications",
-      href: "/admin/cor/applications",
-      icon: FileText,
-      exact: false,
-      count: counts?.applications,
     },
     {
       name: "Opportunities",
@@ -53,6 +46,13 @@ export function CorNavTabs({ counts }: CorNavTabsProps) {
       icon: Briefcase,
       exact: false,
       count: counts?.opportunities,
+    },
+    {
+      name: "Applications",
+      href: "/admin/cor/applications",
+      icon: FileText,
+      exact: false,
+      count: counts?.applications,
     },
   ];
 
