@@ -18,6 +18,7 @@ import {
   reportsRepo,
   settingsRepo,
   collectorsRepo,
+  inquiriesRepo,
 } from "@/lib/data";
 import {
   User,
@@ -1809,6 +1810,28 @@ export async function deleteCorAdminNoteAction(
   } catch (err: any) {
     console.error("deleteCorAdminNoteAction error:", err);
     return { success: false, error: sanitizeClientError(err, "Failed to delete note.") };
+  }
+}
+
+/**
+ * Update Inquiry / Interest Status (Active, Pending, Rejected, Closed)
+ */
+export async function updateInquiryStatusAction(
+  chatId: string,
+  status: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await requireAdminSession();
+
+    if (!isValidId(chatId)) {
+      return { success: false, error: "Invalid inquiry ID format." };
+    }
+
+    const success = await inquiriesRepo.updateStatus(chatId, status);
+    return { success };
+  } catch (err: any) {
+    console.error("updateInquiryStatusAction error:", err);
+    return { success: false, error: sanitizeClientError(err, "Failed to update inquiry status.") };
   }
 }
 

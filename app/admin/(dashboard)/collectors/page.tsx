@@ -1,12 +1,13 @@
 import React, { Suspense } from "react";
-import { collectorsRepo } from "@/lib/data";
+import { collectorsRepo, inquiriesRepo } from "@/lib/data";
 import { CollectorsClient } from "./CollectorsClient";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 export default async function CollectorsPage() {
-  const [collectors, stats] = await Promise.all([
+  const [collectors, stats, inquiryCounts] = await Promise.all([
     collectorsRepo.list(),
     collectorsRepo.stats(),
+    inquiriesRepo.getInquiryCountsByCollector(),
   ]);
 
   return (
@@ -25,6 +26,7 @@ export default async function CollectorsPage() {
       <CollectorsClient
         initialCollectors={collectors}
         preferences={stats.preferences}
+        inquiryCounts={inquiryCounts}
       />
     </Suspense>
   );

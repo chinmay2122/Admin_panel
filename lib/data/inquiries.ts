@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, isSupabaseConfigured } from "../supabase/server";
+import { CollectorArtworkInterest } from "../types";
 
 export interface InquiryChat {
   id: string;
@@ -10,7 +11,7 @@ export interface InquiryChat {
   guestEmail?: string;
   creatorId: string;
   creatorName?: string;
-  status: "Active" | "Closed";
+  status: "Active" | "Closed" | string;
   createdAt: string;
   lastMessage?: string;
 }
@@ -26,6 +27,67 @@ export interface InquiryMessage {
 
 let mockChats: InquiryChat[] = [];
 let mockMessages: InquiryMessage[] = [];
+
+function mapInterestFromSupabase(row: any, collectorId: string): CollectorArtworkInterest {
+  const art = row.artworks || {};
+  const creator = row.creator || {};
+  const guest = row.guest || {};
+  const rawMessages: any[] = Array.isArray(row.messages) ? row.messages : [];
+
+  const messages = rawMessages
+    .slice()
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .map((m) => {
+      const isCollector = m.sender_id === collectorId || m.sender_id === row.guest_id;
+      return {
+        id: m.id,
+        senderId: m.sender_id,
+        senderName: isCollector
+          ? guest.full_name || "Collector"
+          : creator.full_name || art.artist_name || "Creator",
+        content: m.content || "",
+        createdAt: m.created_at,
+        isCollector,
+      };
+    });
+
+  const initialMsg = messages.length > 0 ? messages[0].content : undefined;
+  const lastMsgObj = messages.length > 0 ? messages[messages.length - 1] : undefined;
+
+  return {
+    id: row.id,
+    artworkId: row.artwork_id,
+    artworkTitle: art.title || "Untitled Artwork",
+    artworkImage: art.image_url || "",
+    additionalImages: art.additional_images || [],
+    artistName: art.artist_name || creator.full_name || "Unknown Artist",
+    artType: art.art_type || "Artwork",
+    dimensions: art.dimensions || undefined,
+    year: art.year || undefined,
+    location: art.location || undefined,
+    collection: art.collection || undefined,
+    description: art.description || undefined,
+    price: art.price !== undefined && art.price !== null ? Number(art.price) : null,
+    priceVisibility: art.price_visibility || "Show Price",
+    artworkStatus: art.status || "Available",
+    externalLink: art.external_link || undefined,
+    creatorId: row.creator_id,
+    creatorName: creator.full_name || art.artist_name || "Creator",
+    creatorEmail: creator.email || undefined,
+    creatorPhone: creator.phone_number || undefined,
+    creatorAvatar: creator.profile_pic_url || undefined,
+    collectorId: row.guest_id,
+    collectorName: guest.full_name || "Collector",
+    collectorEmail: guest.email || undefined,
+    status: row.status || "Active",
+    createdAt: row.created_at,
+    initialMessage: initialMsg,
+    lastMessage: lastMsgObj?.content,
+    lastMessageAt: lastMsgObj?.createdAt,
+    messagesCount: messages.length,
+    messages,
+  };
+}
 
 export const inquiriesRepo = {
   /**
@@ -180,7 +242,7 @@ export const inquiriesRepo = {
   /**
    * Update chat status
    */
-  async updateStatus(chatId: string, status: "Active" | "Closed"): Promise<boolean> {
+  async updateStatus(chatId: string, status: "Active" | "Closed" | string): Promise<boolean> {
     const supabase = getSupabaseAdmin();
     if (supabase) {
       try {
@@ -203,5 +265,76 @@ export const inquiriesRepo = {
       return true;
     }
     return false;
+  },
+
+  /**
+   * List all artworks for which a specific collector has expressed interest
+   */
+  async listInterestsByCollector(collectorId: string): Promise<CollectorArtworkInterest[]> {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("inquiries_chats")
+          .select(`
+            id,
+            artwork_id,
+            guest_id,
+            creator_id,
+            status,
+            created_at,
+            artworks:artwork_id (*),
+            guest:guest_id (*),
+            creator:creator_id (*),
+            messages:messages (*)
+          `)
+          .eq("guest_id", collectorId)
+          .order("created_at", { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          return data.map((d: any) => mapInterestFromSupabase(d, collectorId));
+        } else if (error) {
+          console.error("Supabase listInterestsByCollector error:", error);
+        }
+      } catch (err) {
+        console.error("Supabase listInterestsByCollector query failed:", err);
+      }
+    }
+
+    if (isSupabaseConfigured()) {
+      return [];
+    }
+
+    return [];
+  },
+
+  /**
+   * Get count of inquiries/interests per collector
+   */
+  async getInquiryCountsByCollector(): Promise<Record<string, number>> {
+    const supabase = getSupabaseAdmin();
+    const counts: Record<string, number> = {};
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("inquiries_chats")
+          .select("id, guest_id");
+
+        if (!error && Array.isArray(data)) {
+          data.forEach((row: any) => {
+            if (row.guest_id) {
+              counts[row.guest_id] = (counts[row.guest_id] || 0) + 1;
+            }
+          });
+          return counts;
+        } else if (error) {
+          console.error("Supabase getInquiryCountsByCollector error:", error);
+        }
+      } catch (err) {
+        console.error("Supabase getInquiryCountsByCollector failed:", err);
+      }
+    }
+
+    return counts;
   },
 };

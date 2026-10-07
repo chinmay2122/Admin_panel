@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   ArrowUpDown,
@@ -36,6 +37,7 @@ import { updateCollectorAction } from "@/app/admin/actions";
 interface CollectorsClientProps {
   initialCollectors: Collector[];
   preferences: string[];
+  inquiryCounts?: Record<string, number>;
 }
 
 type SortField = "name" | "preferences" | "status" | "createdAt";
@@ -57,6 +59,7 @@ function formatDate(dateStr: string): string {
 export function CollectorsClient({
   initialCollectors,
   preferences,
+  inquiryCounts = {},
 }: CollectorsClientProps) {
   const toast = useToast();
   const searchParams = useSearchParams();
@@ -371,6 +374,21 @@ export function CollectorsClient({
               <tr>
                 <TableHead>
                   <button
+                    onClick={() => handleSort("name")}
+                    className="group inline-flex items-center gap-1.5 hover:text-[#141413] cursor-pointer"
+                  >
+                    <span>Collector</span>
+                    {renderSortIndicator("name")}
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <span>Preferences</span>
+                </TableHead>
+                <TableHead>
+                  <span>Interests Raised</span>
+                </TableHead>
+                <TableHead>
+                  <button
                     onClick={() => handleSort("status")}
                     className="group inline-flex items-center gap-1.5 hover:text-[#141413] cursor-pointer"
                   >
@@ -415,7 +433,22 @@ export function CollectorsClient({
 
                   {/* preferences */}
                   <TableCell className="text-[#52524E]">
-                    {Collector.preferences}
+                    {Collector.preferences || "Various"}
+                  </TableCell>
+
+                  {/* Interests Raised */}
+                  <TableCell>
+                    {(() => {
+                      const count = inquiryCounts[Collector.id] || 0;
+                      return count > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <Sparkles className="w-3 h-3 text-emerald-600" />
+                          {count} {count === 1 ? "Artwork" : "Artworks"}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[#9E9E98]">—</span>
+                      );
+                    })()}
                   </TableCell>
 
                   {/* Status */}
@@ -568,6 +601,22 @@ export function CollectorsClient({
                 <span className="font-medium text-[#141413]">
                   {selectedCollector.preferences || "Various"}
                 </span>
+              </div>
+
+              <div className="flex items-center justify-between py-2 border-b border-[#F0F0EB]">
+                <span className="text-[#6E6E69]">Artworks of Interest</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-[#141413]">
+                    {inquiryCounts[selectedCollector.id] || 0}
+                  </span>
+                  <Link
+                    href={`/admin/collectors/${selectedCollector.id}?tab=collection`}
+                    className="text-[11px] font-semibold text-[#B8532F] hover:underline flex items-center gap-0.5"
+                  >
+                    <span>View Artworks</span>
+                    <span>→</span>
+                  </Link>
+                </div>
               </div>
 
               {selectedCollector.email && (

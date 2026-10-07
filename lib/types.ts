@@ -72,6 +72,47 @@ export interface CollectorFilters {
   status?: CollectorStatus | "all";
 }
 
+export interface CollectorArtworkInterest {
+  id: string; // chat inquiry ID
+  artworkId: string;
+  artworkTitle: string;
+  artworkImage: string;
+  additionalImages?: string[];
+  artistName: string;
+  artType?: string;
+  dimensions?: string;
+  year?: string;
+  location?: string;
+  collection?: string;
+  description?: string;
+  price?: number | null;
+  priceVisibility?: string;
+  artworkStatus?: string;
+  externalLink?: string;
+  creatorId: string;
+  creatorName: string;
+  creatorEmail?: string;
+  creatorPhone?: string;
+  creatorAvatar?: string;
+  collectorId: string;
+  collectorName: string;
+  collectorEmail?: string;
+  status: string; // "Active" | "Pending" | "Rejected" | "Closed"
+  createdAt: string;
+  initialMessage?: string;
+  lastMessage?: string;
+  lastMessageAt?: string;
+  messagesCount: number;
+  messages: Array<{
+    id: string;
+    senderId: string;
+    senderName?: string;
+    content: string;
+    createdAt: string;
+    isCollector: boolean;
+  }>;
+}
+
 export type ArtworkStatus = "draft" | "pending" | "published" | "rejected";
 
 export interface Artwork {
